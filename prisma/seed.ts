@@ -389,6 +389,178 @@ async function main() {
   });
 
   console.log("  ✓ Notes");
+
+  // --- Investment Thesis Criteria ---
+  // Sourced directly from the investor's stated preferences.
+  // HARD_FILTER = disqualifying if not met; SIGNAL = positive indicator weighted by importance (1–5).
+  const thesisData = [
+    // ── Hard Filters ─────────────────────────────────────────────────────────
+    {
+      id: "thesis_founded",
+      name: "Founded 2018–2023",
+      description: "Company must have been founded between 2018 and 2023. Too early = unproven; too late = too early-stage.",
+      category: "HARD_FILTER",
+      dataType: "RANGE",
+      companyField: "founded",
+      minValue: 2018,
+      maxValue: 2023,
+      unit: "year",
+      importance: 5,
+      order: 1,
+    },
+    {
+      id: "thesis_employees",
+      name: "15–250 Employees",
+      description: "Team size indicating post-product but pre-scale — right window for growth capital.",
+      category: "HARD_FILTER",
+      dataType: "RANGE",
+      companyField: "employees",
+      minValue: 15,
+      maxValue: 250,
+      unit: "employees",
+      importance: 5,
+      order: 2,
+    },
+    {
+      id: "thesis_funding",
+      name: "Total Funding < $8M",
+      description: "Has raised less than $8M in total life-to-date funding. Avoids over-capitalised companies with inflated expectations.",
+      category: "HARD_FILTER",
+      dataType: "RANGE",
+      companyField: "totalFundingM",
+      minValue: null,
+      maxValue: 8,
+      unit: "$M",
+      importance: 5,
+      order: 3,
+    },
+    {
+      id: "thesis_independent",
+      name: "Independent (not a subsidiary)",
+      description: "Company must be a standalone entity, not a division or subsidiary of a larger firm.",
+      category: "HARD_FILTER",
+      dataType: "BOOLEAN",
+      boolField: "isIndependent",
+      boolTarget: true,
+      importance: 5,
+      order: 4,
+    },
+    {
+      id: "thesis_no_tier1",
+      name: "No Tier-1 VC Invested",
+      description: "No Sequoia, a16z, Benchmark, Accel, etc. Their involvement signals either too hot or misaligned stage.",
+      category: "HARD_FILTER",
+      dataType: "BOOLEAN",
+      boolField: "hasNoTier1VC",
+      boolTarget: true,
+      importance: 5,
+      order: 5,
+    },
+    {
+      id: "thesis_founder_majority",
+      name: "Founder Majority Ownership",
+      description: "Founder(s) still own the majority. Not PE-owned or majority sold. Ensures alignment and motivation.",
+      category: "HARD_FILTER",
+      dataType: "BOOLEAN",
+      boolField: "founderMajority",
+      boolTarget: true,
+      importance: 5,
+      order: 6,
+    },
+    // ── Signals ───────────────────────────────────────────────────────────────
+    {
+      id: "thesis_arr_sweet_spot",
+      name: "ARR in $2–4M Sweet Spot",
+      description: "ARR in the $2–4M range is the target entry point — proven revenue but room for growth capital to matter.",
+      category: "SIGNAL",
+      dataType: "RANGE",
+      companyField: "arrEstimate",
+      minValue: 2,
+      maxValue: 4,
+      unit: "$M",
+      importance: 4,
+      order: 7,
+    },
+    {
+      id: "thesis_b2b_enterprise",
+      name: "B2B Enterprise Focused",
+      description: "Sells to businesses, not consumers. Enterprise or mid-market buyer, not SMB-only.",
+      category: "SIGNAL",
+      dataType: "TEXT",
+      importance: 5,
+      notes: "Look for: enterprise customer logos, multi-seat deals, procurement involvement, legal/security review in sales cycle.",
+      order: 8,
+    },
+    {
+      id: "thesis_vertical_software",
+      name: "Vertical Software",
+      description: "Purpose-built for a specific industry, not a horizontal point solution. Deep workflow integration beats broad but shallow.",
+      category: "SIGNAL",
+      dataType: "TEXT",
+      importance: 5,
+      notes: "Check: does the product require industry-specific config/knowledge? Would a generic CRM or ERP replace it? If yes, it's horizontal.",
+      order: 9,
+    },
+    {
+      id: "thesis_strategic_acquirer",
+      name: "Attractive to Strategic Acquirers",
+      description: "A large strategic (incumbent software vendor, PE roll-up platform, or industry giant) would plausibly want to buy this one day.",
+      category: "SIGNAL",
+      dataType: "TEXT",
+      importance: 4,
+      notes: "Think: who are the obvious buyers? Industry incumbents, adjacent platform players, or PE-backed vertical consolidators in the space.",
+      order: 10,
+    },
+    {
+      id: "thesis_digital_lag",
+      name: "Serves Industry Behind on Digital Adoption",
+      description: "Targeting an industry that is still paper-heavy, spreadsheet-run, or underserved by modern software — more whitespace and less competition.",
+      category: "SIGNAL",
+      dataType: "TEXT",
+      importance: 3,
+      notes: "Examples: trades/field service, agriculture, legal, healthcare admin, construction, logistics, government. These often have high willingness to pay once trust is established.",
+      order: 11,
+    },
+    {
+      id: "thesis_regulatory_lock_in",
+      name: "Regulatory / Compliance Lock-in",
+      description: "Product creates stickiness through regulatory compliance requirements, audit trails, or certification workflows. High gross dollar retention.",
+      category: "SIGNAL",
+      dataType: "TEXT",
+      importance: 4,
+      notes: "Look for: mandatory usage, SOC 2 / HIPAA / FDA / AML requirements, audit log dependency, or government mandate as the forcing function to buy.",
+      order: 12,
+    },
+    {
+      id: "thesis_pain_killer",
+      name: "Pain Killer, Not a Vitamin",
+      description: "Solves a must-have problem evidenced by decent ACVs (>$10K). High ACV = real pain, real budget, real product-market fit.",
+      category: "SIGNAL",
+      dataType: "TEXT",
+      importance: 5,
+      notes: "Red flags: very low ACV (<$3K), high churn, described as 'nice to have', or heavily discounted. Green flags: multi-year contracts, expansion revenue, strong NRR.",
+      order: 13,
+    },
+  ];
+
+  for (const t of thesisData) {
+    await db.thesisCriterion.upsert({
+      where: { id: t.id },
+      update: {},
+      create: {
+        ...t,
+        minValue: t.minValue ?? null,
+        maxValue: t.maxValue ?? null,
+        companyField: t.companyField ?? null,
+        boolField: t.boolField ?? null,
+        boolTarget: t.boolTarget ?? null,
+        unit: t.unit ?? null,
+        notes: t.notes ?? null,
+      },
+    });
+  }
+  console.log(`  ✓ ${thesisData.length} thesis criteria`);
+
   console.log("\n✅ Seed complete!");
 }
 

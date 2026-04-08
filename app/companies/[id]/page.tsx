@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import ThesisFitPanel from "@/components/companies/ThesisFitPanel";
+import FeedbackButton from "@/components/companies/FeedbackButton";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,10 +84,16 @@ interface Company {
   linkedinUrl: string | null;
   crunchbaseUrl: string | null;
   totalScore: number | null;
+  thesisFitScore: number | null;
+  totalFundingM: number | null;
+  isIndependent: boolean | null;
+  hasNoTier1VC: boolean | null;
+  founderMajority: boolean | null;
   contacts: Contact[];
   interactions: Interaction[];
   scoreDetails: ScoreDetail[];
   notes: Note[];
+  feedback?: { signal: string }[];
 }
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
@@ -310,6 +318,11 @@ export default function CompanyDetailPage() {
             </>
           ) : (
             <>
+              <FeedbackButton
+                companyId={company.id}
+                source="detail"
+                currentSignal={company.feedback?.[0]?.signal as import("@/lib/thesis").FeedbackSignal | undefined}
+              />
               <Link href={`/outreach?companyId=${company.id}`}>
                 <Button variant="outline" size="sm">
                   <Send size={14} /> Outreach
@@ -473,6 +486,23 @@ export default function CompanyDetailPage() {
               </CardContent>
             </Card>
 
+            <div className="space-y-5">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center justify-between">
+                  Thesis Fit
+                  {company.thesisFitScore !== null && (
+                    <span className={`text-sm font-bold ${company.thesisFitScore < 0 ? "text-red-600" : company.thesisFitScore >= 75 ? "text-emerald-600" : company.thesisFitScore >= 50 ? "text-yellow-600" : "text-red-500"}`}>
+                      {company.thesisFitScore < 0 ? "Fails Filters" : `${company.thesisFitScore}%`}
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ThesisFitPanel companyId={company.id} />
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader><CardTitle className="text-base">Investment Score</CardTitle></CardHeader>
               <CardContent>
@@ -504,6 +534,7 @@ export default function CompanyDetailPage() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           </div>
         </TabsContent>
 

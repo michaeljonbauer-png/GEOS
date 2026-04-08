@@ -21,6 +21,7 @@ export async function GET(
         },
         notes: { orderBy: { createdAt: "desc" } },
         companyTags: { include: { tag: true } },
+        feedback: { orderBy: { createdAt: "desc" }, take: 1 },
       },
     });
 

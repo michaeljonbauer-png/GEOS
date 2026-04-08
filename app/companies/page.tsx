@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getStatusConfig, formatARR, formatGrowth, scoreColor, COMPANY_STATUSES, SECTORS } from "@/lib/utils";
+import FeedbackButton from "@/components/companies/FeedbackButton";
+import type { FeedbackSignal } from "@/lib/thesis";
 
 interface Company {
   id: string;
@@ -21,8 +23,10 @@ interface Company {
   arrEstimate: number | null;
   arrGrowth: number | null;
   totalScore: number | null;
+  thesisFitScore: number | null;
   updatedAt: string;
   contacts: { firstName: string; lastName: string }[];
+  feedback: { signal: string }[];
   _count: { interactions: number; contacts: number };
 }
 
@@ -179,24 +183,32 @@ function CompaniesPage() {
                   Score <SortIcon col="totalScore" />
                 </span>
               </th>
-              <th className="text-center px-4 py-3 font-medium text-slate-600">
-                Contacts
+              <th
+                className="text-right px-4 py-3 font-medium text-slate-600 cursor-pointer hover:text-slate-900 select-none"
+                onClick={() => toggleSort("thesisFitScore")}
+              >
+                <span className="flex items-center justify-end gap-1">
+                  Thesis Fit <SortIcon col="thesisFitScore" />
+                </span>
               </th>
               <th className="text-center px-4 py-3 font-medium text-slate-600">
                 Activity
+              </th>
+              <th className="px-4 py-3 font-medium text-slate-600 text-center">
+                Rate
               </th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-slate-400">
+                <td colSpan={9} className="text-center py-12 text-slate-400">
                   Loading...
                 </td>
               </tr>
             ) : companies.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-slate-400">
+                <td colSpan={9} className="text-center py-12 text-slate-400">
                   No companies found.{" "}
                   <Link href="/companies/new" className="text-blue-600 hover:underline">
                     Add your first company
@@ -271,11 +283,38 @@ function CompaniesPage() {
                         <span className="text-slate-300">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center text-slate-500">
-                      {co._count.contacts}
+                    <td className="px-4 py-3 text-right">
+                      {co.thesisFitScore !== null ? (
+                        co.thesisFitScore < 0 ? (
+                          <span className="text-xs font-semibold text-red-500">Fails</span>
+                        ) : (
+                          <span className={`text-sm font-bold ${co.thesisFitScore >= 75 ? "text-emerald-600" : co.thesisFitScore >= 50 ? "text-yellow-600" : "text-red-500"}`}>
+                            {co.thesisFitScore}%
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center text-slate-500">
                       {co._count.interactions}
+                    </td>
+                    <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <FeedbackButton
+                        companyId={co.id}
+                        compact
+                        source="list"
+                        currentSignal={co.feedback?.[0]?.signal as FeedbackSignal | undefined}
+                        onSaved={() => {
+                          setCompanies((prev) =>
+                            prev.map((c) =>
+                              c.id === co.id
+                                ? { ...c, feedback: [{ signal: co.feedback?.[0]?.signal ?? "" }] }
+                                : c
+                            )
+                          );
+                        }}
+                      />
                     </td>
                   </tr>
                 );

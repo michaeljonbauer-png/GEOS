@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
       },
       include: {
         contacts: { where: { isPrimary: true }, take: 1 },
+        feedback: { orderBy: { createdAt: "desc" }, take: 1 },
         _count: { select: { interactions: true, contacts: true } },
       },
       orderBy: { [sortBy]: sortDir },

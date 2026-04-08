@@ -28,6 +28,15 @@ model Company {
   linkedinUrl   String?
   crunchbaseUrl String?
   totalScore    Float?
+  // Thesis fields (populated by user or research)
+  totalFundingM Float?   // total funding raised in $M
+  isIndependent Boolean?
+  hasNoTier1VC  Boolean?
+  founderMajority Boolean?
+  isPE          Boolean?  @default(false)
+  verticalFocus String?  // vertical software focus description
+  acv           Float?   // average contract value in $K
+  thesisFitScore Float?  // cached thesis fit score (0-100)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -36,6 +45,42 @@ model Company {
   scoreDetails ScoreDetail[]
   notes        Note[]
   companyTags  CompanyTag[]
+  feedback     CompanyFeedback[]
+}
+
+// Thesis criterion — hard filters and weighted signals
+model ThesisCriterion {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String   // HARD_FILTER | SIGNAL
+  dataType    String   // RANGE | BOOLEAN | TEXT
+  // For RANGE type — maps to a company field
+  companyField String? // e.g. "founded", "employees", "totalFundingM", "arrEstimate"
+  minValue    Float?
+  maxValue    Float?
+  unit        String?  // display unit: "year", "employees", "$M", "$K"
+  // For BOOLEAN type — maps to a company boolean field or is assessed manually
+  boolField   String?  // e.g. "isIndependent", "hasNoTier1VC", "founderMajority"
+  boolTarget  Boolean? // the desired value (true/false)
+  // For manual/qualitative signals
+  importance  Float    @default(3.0) // 1–5, drives weighting in fit score
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  notes       String?  // rationale / guidance for assessing this criterion
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// User feedback on a company — drives the learning system
+model CompanyFeedback {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  signal    String   // PASS | WATCH | INTERESTED | HIGH_PRIORITY
+  notes     String?  // freeform: what specifically resonated or didn't
+  source    String?  // where feedback was given: "list" | "detail" | "pipeline"
+  createdAt DateTime @default(now())
 }
 
 model Contact {
