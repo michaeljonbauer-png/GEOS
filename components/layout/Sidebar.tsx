@@ -10,6 +10,8 @@ import {
   ActivitySquare,
   Settings,
   TrendingUp,
+  BarChart3,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +22,11 @@ const navItems = [
   { href: "/outreach", label: "Outreach", icon: Send },
   { href: "/crm", label: "Activity", icon: ActivitySquare },
   { href: "/settings", label: "Settings", icon: Settings },
+];
+
+const comingSoonItems = [
+  { href: "/portfolio", label: "Portfolio", icon: BarChart3 },
+  { href: "/lp-reporting", label: "LP Reporting", icon: FileText },
 ];
 
 export default function Sidebar() {
@@ -41,7 +48,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {navItems.map(({ href, label, icon: Icon }) => {
           const isActive =
             href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -58,6 +65,36 @@ export default function Sidebar() {
             >
               <Icon size={17} />
               {label}
+            </Link>
+          );
+        })}
+
+        {/* Coming Soon section */}
+        <div className="pt-4 pb-1">
+          <p className="px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+            Coming Soon
+          </p>
+        </div>
+        {comingSoonItems.map(({ href, label, icon: Icon }) => {
+          const isActive = pathname.startsWith(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-slate-800 text-slate-300"
+                  : "text-slate-600 hover:bg-slate-800/60 hover:text-slate-400"
+              )}
+            >
+              <span className="flex items-center gap-3">
+                <Icon size={17} />
+                {label}
+              </span>
+              <span className="text-[10px] bg-slate-700/60 text-slate-500 rounded px-1.5 py-0.5 font-normal">
+                Soon
+              </span>
             </Link>
           );
         })}
