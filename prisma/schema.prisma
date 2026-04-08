@@ -37,6 +37,7 @@ model Company {
   verticalFocus String?  // vertical software focus description
   acv           Float?   // average contract value in $K
   thesisFitScore Float?  // cached thesis fit score (0-100)
+  productRepScore Float? // cached product reputation score (0-10)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -46,6 +47,7 @@ model Company {
   notes        Note[]
   companyTags  CompanyTag[]
   feedback     CompanyFeedback[]
+  research     CompanyResearch?
 }
 
 // Thesis criterion — hard filters and weighted signals
@@ -170,4 +172,74 @@ model OutreachTemplate {
   body      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Aggregated research data from external sources for a company
+model CompanyResearch {
+  id        String  @id @default(cuid())
+  companyId String  @unique
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // ── Review platforms ─────────────────────────────────────────────────────
+  // G2
+  g2Url          String?
+  g2Rating       Float?   // 0–5
+  g2ReviewCount  Int?
+  g2Category     String?  // category they appear under on G2
+  g2Momentum     String?  // Leader / High Performer / Momentum Leader etc.
+  // Capterra
+  capterraUrl         String?
+  capterraRating      Float?
+  capterraReviewCount Int?
+  // Gartner Peer Insights
+  gartnerUrl         String?
+  gartnerRating      Float?
+  gartnerReviewCount Int?
+  // Trustpilot / other
+  trustpilotUrl       String?
+  trustpilotRating    Float?
+  trustpilotReviewCount Int?
+
+  // ── Web traffic (SimilarWeb, etc.) ───────────────────────────────────────
+  similarwebUrl   String?
+  monthlyVisits   Int?     // estimated monthly unique visits
+  trafficTrend    String?  // UP | DOWN | STABLE
+  globalRank      Int?
+  trafficSources  String?  // JSON: {direct, search, social, referral, …}
+
+  // ── Funding / investor intelligence ──────────────────────────────────────
+  // Crunchbase
+  crunchbaseSlug      String?
+  lastFundingType     String?  // Seed, Series A, etc.
+  lastFundingAmount   Float?   // $M
+  lastFundingDate     String?
+  keyInvestors        String?  // comma-separated list
+  // PitchBook
+  pitchbookUrl   String?
+  // Harmonic
+  harmonicUrl    String?
+  // Grata
+  grataUrl       String?
+  // SourceScrub
+  sourcescrubUrl String?
+
+  // ── Market positioning ────────────────────────────────────────────────────
+  gartnerMQUrl   String?  // Gartner Magic Quadrant reference
+  forresterUrl   String?
+  idc            String?
+
+  // ── Press / news ──────────────────────────────────────────────────────────
+  // Stored as JSON array: [{title, url, date, source}]
+  recentNews     String?
+
+  // ── Customer evidence ─────────────────────────────────────────────────────
+  caseStudyUrl   String?
+  keyCustomers   String?  // notable logos (comma-separated)
+  testimonialsUrl String?
+
+  // ── Computed / notes ─────────────────────────────────────────────────────
+  productRepScore Float?   // weighted review score 0–10 (cached)
+  researchNotes  String?
+  lastResearched DateTime?
+  updatedAt      DateTime @updatedAt
 }

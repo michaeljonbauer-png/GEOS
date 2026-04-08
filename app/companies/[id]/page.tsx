@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import ThesisFitPanel from "@/components/companies/ThesisFitPanel";
 import FeedbackButton from "@/components/companies/FeedbackButton";
+import ResearchTab from "@/components/companies/ResearchTab";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -393,6 +394,7 @@ export default function CompanyDetailPage() {
             Activity ({company.interactions.length})
           </TabsTrigger>
           <TabsTrigger value="notes">Notes ({company.notes.length})</TabsTrigger>
+          <TabsTrigger value="research">Research</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -779,6 +781,15 @@ export default function CompanyDetailPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Research Tab */}
+        <TabsContent value="research">
+          <ResearchTab
+            companyId={company.id}
+            companyName={company.name}
+            domain={company.website}
+          />
         </TabsContent>
       </Tabs>
 
