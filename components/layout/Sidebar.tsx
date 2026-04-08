@@ -12,6 +12,7 @@ import {
   TrendingUp,
   BarChart3,
   FileText,
+  Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,7 @@ const navItems = [
 ];
 
 const comingSoonItems = [
+  { href: "/live-deal", label: "Live Deal", icon: Briefcase },
   { href: "/portfolio", label: "Portfolio", icon: BarChart3 },
   { href: "/lp-reporting", label: "LP Reporting", icon: FileText },
 ];
