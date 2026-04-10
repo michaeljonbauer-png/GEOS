@@ -11,8 +11,8 @@ import {
   Settings,
   TrendingUp,
   BarChart3,
-  FileText,
   Briefcase,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,17 +22,36 @@ const navItems = [
   { href: "/pipeline", label: "Pipeline", icon: GitMerge },
   { href: "/outreach", label: "Outreach", icon: Send },
   { href: "/crm", label: "Activity", icon: ActivitySquare },
-  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-const comingSoonItems = [
+const dealItems = [
   { href: "/live-deal", label: "Live Deal", icon: Briefcase },
   { href: "/portfolio", label: "Portfolio", icon: BarChart3 },
-  { href: "/lp-reporting", label: "LP Reporting", icon: FileText },
+  { href: "/lp-reporting", label: "LP Communications", icon: Users },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const navLink = (href: string, label: string, Icon: any) => {
+    const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
+    return (
+      <Link
+        key={href}
+        href={href}
+        className={cn(
+          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+          isActive
+            ? "bg-blue-600 text-white"
+            : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+        )}
+      >
+        <Icon size={17} />
+        {label}
+      </Link>
+    );
+  };
 
   return (
     <aside className="flex h-screen w-60 flex-col bg-slate-900 text-slate-100 shrink-0">
@@ -51,62 +70,26 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const isActive =
-            href === "/" ? pathname === "/" : pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-blue-600 text-white"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
-              )}
-            >
-              <Icon size={17} />
-              {label}
-            </Link>
-          );
-        })}
+        {navItems.map(({ href, label, icon: Icon }) => navLink(href, label, Icon))}
 
-        {/* Coming Soon section */}
         <div className="pt-4 pb-1">
           <p className="px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
-            Coming Soon
+            Deals &amp; Portfolio
           </p>
         </div>
-        {comingSoonItems.map(({ href, label, icon: Icon }) => {
-          const isActive = pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-slate-800 text-slate-300"
-                  : "text-slate-600 hover:bg-slate-800/60 hover:text-slate-400"
-              )}
-            >
-              <span className="flex items-center gap-3">
-                <Icon size={17} />
-                {label}
-              </span>
-              <span className="text-[10px] bg-slate-700/60 text-slate-500 rounded px-1.5 py-0.5 font-normal">
-                Soon
-              </span>
-            </Link>
-          );
-        })}
+        {dealItems.map(({ href, label, icon: Icon }) => navLink(href, label, Icon))}
+
+        <div className="pt-4 pb-1">
+          <p className="px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+            Settings
+          </p>
+        </div>
+        {navLink("/settings", "Settings", Settings)}
       </nav>
 
       {/* Footer */}
       <div className="px-4 py-4 border-t border-slate-700/50">
-        <p className="text-[11px] text-slate-500">
-          Growth Equity Operating System
-        </p>
+        <p className="text-[11px] text-slate-500">Growth Equity Operating System</p>
         <p className="text-[11px] text-slate-600">v1.0.0</p>
       </div>
     </aside>

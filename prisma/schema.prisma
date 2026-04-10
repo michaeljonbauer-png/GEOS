@@ -46,10 +46,14 @@ model Company {
   scoreDetails ScoreDetail[]
   notes        Note[]
   companyTags  CompanyTag[]
-  feedback     CompanyFeedback[]
-  research     CompanyResearch?
-  fieldSources CompanyFieldSource[]
-  customValues CompanyCustomValue[]
+  feedback         CompanyFeedback[]
+  research         CompanyResearch?
+  fieldSources     CompanyFieldSource[]
+  customValues     CompanyCustomValue[]
+  diligenceTasks   DealDiligenceTask[]
+  dealTerms        DealTerm[]
+  investment       PortfolioInvestment?
+  kpiSnapshots     PortfolioKPISnapshot[]
 }
 
 // Source attribution for individual company data fields
@@ -189,7 +193,108 @@ model OutreachTemplate {
   updatedAt DateTime @updatedAt
 }
 
-// Custom field definitions — global (all companies) or company-specific
+// ── Live Deal execution ───────────────────────────────────────────────────────
+
+// Due diligence checklist tasks per deal/company
+model DealDiligenceTask {
+  id         String    @id @default(cuid())
+  companyId  String
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title      String
+  workstream String    // FINANCIAL | LEGAL | COMMERCIAL | TECHNICAL | HR | MANAGEMENT
+  status     String    @default("OPEN")  // OPEN | IN_PROGRESS | DONE | BLOCKED
+  priority   String    @default("MEDIUM") // HIGH | MEDIUM | LOW
+  assignee   String?
+  dueDate    DateTime?
+  notes      String?
+  order      Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+// Key deal terms captured from LOI / term sheet
+model DealTerm {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String   // e.g. "Pre-money Valuation", "Investment Amount"
+  value     String?
+  notes     String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+// ── Portfolio monitoring ──────────────────────────────────────────────────────
+
+// Investment record — one per invested company
+model PortfolioInvestment {
+  id               String    @id @default(cuid())
+  companyId        String    @unique
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  investedAmount   Float?    // $M deployed
+  ownershipPct     Float?    // % fully-diluted ownership
+  investmentDate   DateTime?
+  roundType        String?   // Seed, Series A, etc.
+  preMoneyVal      Float?    // pre-money valuation $M
+  currentValuation Float?    // latest mark $M
+  proRataRights    Boolean   @default(false)
+  boardSeat        Boolean   @default(false)
+  leadInvestor     Boolean   @default(false)
+  coInvestors      String?   // comma-separated
+  reserveAmount    Float?    // follow-on reserve $M
+  moic             Float?    // current MOIC
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+// Monthly/quarterly KPI snapshots per portfolio company
+model PortfolioKPISnapshot {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  period      String   // "2024-Q1", "2024-Q2" …
+  arr         Float?   // $M
+  arrGrowth   Float?   // YoY %
+  nrr         Float?   // %
+  grossMargin Float?   // %
+  employees   Int?
+  burn        Float?   // monthly $M
+  runway      Int?     // months
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@unique([companyId, period])
+}
+
+// ── LP Communications ─────────────────────────────────────────────────────────
+
+model LPContact {
+  id          String   @id @default(cuid())
+  name        String
+  firm        String?
+  email       String?
+  phone       String?
+  commitment  Float?   // capital committed $M
+  type        String   @default("LP") // LP | CO_INVESTOR | ADVISOR
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model LPUpdate {
+  id        String    @id @default(cuid())
+  period    String    // e.g. "Q1 2025"
+  title     String
+  body      String    // markdown / freeform
+  status    String    @default("DRAFT") // DRAFT | SENT
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// ── Custom fields (already defined above) ────────────────────────────────────
+
 model CustomFieldDef {
   id          String   @id @default(cuid())
   name        String   // e.g. "EBITDA", "CAC Payback"
