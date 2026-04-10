@@ -479,6 +479,11 @@ export default function CompanyDetailPage() {
                       <Label>Description</Label>
                       <Textarea className="mt-1" rows={4} value={(editForm.description as string) ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} />
                     </div>
+                    <CustomFieldsSection
+                      companyId={company.id}
+                      sources={sources}
+                      onSourceSaved={updateSource}
+                    />
                   </div>
                 ) : (
                   <>
