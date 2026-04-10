@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/custom-fields?companyId=xxx
 // Returns all global fields + any company-specific fields for the given company
 export async function GET(request: NextRequest) {

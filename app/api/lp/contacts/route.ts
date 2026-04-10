@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const contacts = await db.lPContact.findMany({ orderBy: { name: "asc" } });
   return NextResponse.json(contacts);
