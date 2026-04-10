@@ -17,6 +17,7 @@ import ThesisFitPanel from "@/components/companies/ThesisFitPanel";
 import FeedbackButton from "@/components/companies/FeedbackButton";
 import ResearchTab from "@/components/companies/ResearchTab";
 import SourceBadge from "@/components/companies/SourceBadge";
+import CustomFieldsSection from "@/components/companies/CustomFieldsSection";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -529,6 +530,11 @@ export default function CompanyDetailPage() {
                         </div>
                       )}
                     </dl>
+                    <CustomFieldsSection
+                      companyId={company.id}
+                      sources={sources}
+                      onSourceSaved={updateSource}
+                    />
                   </>
                 )}
               </CardContent>

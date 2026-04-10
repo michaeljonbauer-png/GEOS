@@ -49,6 +49,7 @@ model Company {
   feedback     CompanyFeedback[]
   research     CompanyResearch?
   fieldSources CompanyFieldSource[]
+  customValues CompanyCustomValue[]
 }
 
 // Source attribution for individual company data fields
@@ -186,6 +187,33 @@ model OutreachTemplate {
   body      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Custom field definitions — global (all companies) or company-specific
+model CustomFieldDef {
+  id          String   @id @default(cuid())
+  name        String   // e.g. "EBITDA", "CAC Payback"
+  fieldType   String   @default("TEXT") // TEXT | NUMBER | BOOLEAN | URL
+  isGlobal    Boolean  @default(false)  // true = shown on all companies
+  companyId   String?  // set only when isGlobal=false (company-specific)
+  unit        String?  // e.g. "$M", "%", "months"
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  values      CompanyCustomValue[]
+}
+
+// Values for custom fields, keyed per company
+model CompanyCustomValue {
+  id        String          @id @default(cuid())
+  fieldId   String
+  field     CustomFieldDef  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  value     String?         // stored as string, cast by fieldType on read
+  updatedAt DateTime        @updatedAt
+
+  @@unique([fieldId, companyId])
 }
 
 // Aggregated research data from external sources for a company
