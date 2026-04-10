@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 // Companies in active deal stages — Meeting Scheduled → Due Diligence
 const DEAL_STATUSES = ["MEETING_SCHEDULED", "DUE_DILIGENCE"];
 

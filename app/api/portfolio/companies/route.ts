@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 // Returns all companies with status INVESTED or MONITORING, with their
 // investment record and latest KPI snapshot
 export async function GET() {
