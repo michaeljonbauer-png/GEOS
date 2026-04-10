@@ -48,6 +48,20 @@ model Company {
   companyTags  CompanyTag[]
   feedback     CompanyFeedback[]
   research     CompanyResearch?
+  fieldSources CompanyFieldSource[]
+}
+
+// Source attribution for individual company data fields
+model CompanyFieldSource {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  field       String   // e.g. "arrEstimate", "employees", "arrGrowth"
+  sourceLabel String   // e.g. "PitchBook", "LinkedIn", "Crunchbase", "Founder call"
+  sourceUrl   String?  // direct link if available
+  capturedAt  DateTime @default(now())
+
+  @@unique([companyId, field])
 }
 
 // Thesis criterion — hard filters and weighted signals

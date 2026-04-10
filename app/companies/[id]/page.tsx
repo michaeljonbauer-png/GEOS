@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import ThesisFitPanel from "@/components/companies/ThesisFitPanel";
 import FeedbackButton from "@/components/companies/FeedbackButton";
 import ResearchTab from "@/components/companies/ResearchTab";
+import SourceBadge from "@/components/companies/SourceBadge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,6 +88,7 @@ interface Company {
   totalScore: number | null;
   thesisFitScore: number | null;
   totalFundingM: number | null;
+  acv: number | null;
   isIndependent: boolean | null;
   hasNoTier1VC: boolean | null;
   founderMajority: boolean | null;
@@ -121,14 +123,17 @@ export default function CompanyDetailPage() {
   const [contactForm, setContactForm] = useState({ firstName: "", lastName: "", title: "", email: "", linkedinUrl: "", isPrimary: false });
   const [interactionForm, setInteractionForm] = useState({ type: "EMAIL", direction: "OUTBOUND", subject: "", content: "", followUpDate: "" });
   const [noteText, setNoteText] = useState("");
+  const [sources, setSources] = useState<Record<string, { sourceLabel: string; sourceUrl: string | null; capturedAt?: string }>>({});
 
   const load = useCallback(() => {
     Promise.all([
       fetch(`/api/companies/${id}`).then((r) => r.json()),
       fetch("/api/criteria").then((r) => r.json()),
-    ]).then(([co, crits]) => {
+      fetch(`/api/companies/${id}/sources`).then((r) => r.json()),
+    ]).then(([co, crits, srcs]) => {
       setCompany(co);
       setCriteria(crits);
+      setSources(srcs ?? {});
       const initialScores: Record<string, { score: string; notes: string }> = {};
       (co.scoreDetails as ScoreDetail[]).forEach((sd) => {
         initialScores[sd.criterionId] = { score: sd.score.toString(), notes: sd.notes ?? "" };
@@ -137,6 +142,10 @@ export default function CompanyDetailPage() {
       setEditForm(co);
     }).finally(() => setLoading(false));
   }, [id]);
+
+  const updateSource = (field: string, updated: { sourceLabel: string; sourceUrl: string | null; capturedAt?: string }) => {
+    setSources((prev) => updated.sourceLabel ? { ...prev, [field]: updated } : Object.fromEntries(Object.entries(prev).filter(([k]) => k !== field)));
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -343,15 +352,23 @@ export default function CompanyDetailPage() {
       {/* Quick metrics */}
       <div className="grid grid-cols-5 gap-4 mb-6">
         {[
-          { label: "ARR", value: formatARR(company.arrEstimate) },
-          { label: "Growth", value: formatGrowth(company.arrGrowth) },
-          { label: "NRR", value: company.nrrEstimate ? `${company.nrrEstimate}%` : "—" },
-          { label: "GM", value: company.grossMargin ? `${company.grossMargin}%` : "—" },
-          { label: "Employees", value: company.employees?.toLocaleString() ?? "—" },
-        ].map(({ label, value }) => (
+          { label: "ARR", field: "arrEstimate", value: formatARR(company.arrEstimate) },
+          { label: "Growth", field: "arrGrowth", value: formatGrowth(company.arrGrowth) },
+          { label: "NRR", field: "nrrEstimate", value: company.nrrEstimate ? `${company.nrrEstimate}%` : "—" },
+          { label: "GM", field: "grossMargin", value: company.grossMargin ? `${company.grossMargin}%` : "—" },
+          { label: "Employees", field: "employees", value: company.employees?.toLocaleString() ?? "—" },
+        ].map(({ label, field, value }) => (
           <div key={label} className="bg-white rounded-lg border border-slate-200 px-4 py-3 text-center">
             <p className="text-xs text-slate-400 uppercase tracking-wide">{label}</p>
             <p className="text-lg font-bold text-slate-800 mt-0.5">{value}</p>
+            <div className="flex justify-center mt-1">
+              <SourceBadge
+                companyId={company.id}
+                field={field}
+                source={sources[field]}
+                onSaved={(updated) => updateSource(field, updated)}
+              />
+            </div>
           </div>
         ))}
       </div>
@@ -470,18 +487,47 @@ export default function CompanyDetailPage() {
                     <Separator />
                     <dl className="grid grid-cols-2 gap-3 text-sm">
                       {[
-                        ["Founded", company.founded ?? "—"],
-                        ["Stage", company.stage ?? "—"],
-                        ["Geography", company.geography ?? "—"],
-                        ["Sub-sector", company.subSector ?? "—"],
-                        ["Source", company.source ?? "—"],
-                        ["Priority", company.priority],
-                      ].map(([label, value]) => (
-                        <div key={label as string}>
+                        { label: "Stage", value: company.stage ?? "—", field: null },
+                        { label: "Geography", value: company.geography ?? "—", field: null },
+                        { label: "Sub-sector", value: company.subSector ?? "—", field: null },
+                        { label: "Source", value: company.source ?? "—", field: null },
+                        { label: "Priority", value: company.priority, field: null },
+                      ].map(({ label, value, field }) => (
+                        <div key={label}>
                           <dt className="text-slate-400 text-xs">{label}</dt>
-                          <dd className="font-medium text-slate-700">{value as string}</dd>
+                          <dd className="font-medium text-slate-700 flex items-center flex-wrap">
+                            {value}
+                            {field && (
+                              <SourceBadge companyId={company.id} field={field} source={sources[field]} onSaved={(u) => updateSource(field, u)} />
+                            )}
+                          </dd>
                         </div>
                       ))}
+                      <div>
+                        <dt className="text-slate-400 text-xs">Founded</dt>
+                        <dd className="font-medium text-slate-700 flex items-center flex-wrap">
+                          {company.founded ?? "—"}
+                          <SourceBadge companyId={company.id} field="founded" source={sources["founded"]} onSaved={(u) => updateSource("founded", u)} />
+                        </dd>
+                      </div>
+                      {company.totalFundingM != null && (
+                        <div>
+                          <dt className="text-slate-400 text-xs">Total Funding</dt>
+                          <dd className="font-medium text-slate-700 flex items-center flex-wrap">
+                            ${company.totalFundingM}M
+                            <SourceBadge companyId={company.id} field="totalFundingM" source={sources["totalFundingM"]} onSaved={(u) => updateSource("totalFundingM", u)} />
+                          </dd>
+                        </div>
+                      )}
+                      {company.acv != null && (
+                        <div>
+                          <dt className="text-slate-400 text-xs">ACV</dt>
+                          <dd className="font-medium text-slate-700 flex items-center flex-wrap">
+                            ${company.acv}K
+                            <SourceBadge companyId={company.id} field="acv" source={sources["acv"]} onSaved={(u) => updateSource("acv", u)} />
+                          </dd>
+                        </div>
+                      )}
                     </dl>
                   </>
                 )}
