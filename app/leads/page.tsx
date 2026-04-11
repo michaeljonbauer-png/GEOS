@@ -213,17 +213,24 @@ export default function LeadsPage() {
     setGenerating(true);
     try {
       const res = await fetch("/api/leads/generate", { method: "POST" });
-      if (!res.ok) throw new Error("Generation failed");
-      const { generated, message } = await res.json() as { generated: number; message?: string };
-      if (generated === 0 && message) {
-        toast({ title: message });
+      const data = await res.json() as { generated?: number; message?: string; error?: string };
+      if (!res.ok) {
+        toast({
+          title: "Could not generate leads",
+          description: data.error ?? "Unknown error — check Railway logs.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (data.generated === 0 && data.message) {
+        toast({ title: data.message });
       }
       const fresh = await fetchLeads();
       setLeads(fresh);
-    } catch {
+    } catch (err) {
       toast({
         title: "Could not generate leads",
-        description: "Check that ANTHROPIC_API_KEY is set in Railway environment variables.",
+        description: err instanceof Error ? err.message : "Network error — check Railway logs.",
         variant: "destructive",
       });
     } finally {

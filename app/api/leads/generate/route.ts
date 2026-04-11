@@ -6,54 +6,63 @@ export const dynamic = "force-dynamic";
 
 const QUEUE_TARGET = 10;
 
-const anthropic = new Anthropic();
-
 export async function POST() {
-  // How many leads do we need to reach the target?
-  const currentCount = await db.company.count({ where: { status: "LEAD" } });
-  const toGenerate = Math.max(0, QUEUE_TARGET - currentCount);
-
-  if (toGenerate === 0) {
-    return NextResponse.json({ generated: 0, message: "Queue is already full" });
+  // Validate API key up front so we can return a clear error
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json(
+      { error: "ANTHROPIC_API_KEY is not set. Add it in Railway → your service → Variables." },
+      { status: 500 }
+    );
   }
 
-  // --- Build context for Claude ---
-  const [thesisCriteria, existingCompanies, recentFeedback] = await Promise.all([
-    db.thesisCriterion.findMany({ where: { isActive: true }, orderBy: { order: "asc" } }),
-    db.company.findMany({ select: { name: true }, orderBy: { createdAt: "desc" } }),
-    db.companyFeedback.findMany({
-      include: { company: { select: { name: true, sector: true, subSector: true, arrEstimate: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 40,
-    }),
-  ]);
+  try {
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const thesisSummary = thesisCriteria.map(t => {
-    if (t.dataType === "RANGE" && t.companyField) {
-      const parts = [t.minValue != null ? `min ${t.minValue}` : null, t.maxValue != null ? `max ${t.maxValue}` : null].filter(Boolean).join(", ");
-      return `• ${t.name} [${t.category}]: ${t.companyField} — ${parts}${t.unit ? " " + t.unit : ""}`;
+    // How many leads do we need to reach the target?
+    const currentCount = await db.company.count({ where: { status: "LEAD" } });
+    const toGenerate = Math.max(0, QUEUE_TARGET - currentCount);
+
+    if (toGenerate === 0) {
+      return NextResponse.json({ generated: 0, message: "Queue is already full" });
     }
-    if (t.dataType === "BOOLEAN" && t.boolField) {
-      return `• ${t.name} [${t.category}]: ${t.boolField} must be ${t.boolTarget}`;
-    }
-    return `• ${t.name} [${t.category}]: ${t.notes ?? t.description ?? "qualitative signal"}`;
-  }).join("\n");
 
-  const existingNames = existingCompanies.map(c => c.name).join(", ") || "None yet";
+    // --- Build context for Claude ---
+    const [thesisCriteria, existingCompanies, recentFeedback] = await Promise.all([
+      db.thesisCriterion.findMany({ where: { isActive: true }, orderBy: { order: "asc" } }),
+      db.company.findMany({ select: { name: true }, orderBy: { createdAt: "desc" } }),
+      db.companyFeedback.findMany({
+        include: { company: { select: { name: true, sector: true, subSector: true, arrEstimate: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 40,
+      }),
+    ]);
 
-  const interested = recentFeedback.filter(f => ["INTERESTED", "HIGH_PRIORITY"].includes(f.signal));
-  const passed = recentFeedback.filter(f => f.signal === "PASS");
+    const thesisSummary = thesisCriteria.map(t => {
+      if (t.dataType === "RANGE" && t.companyField) {
+        const parts = [t.minValue != null ? `min ${t.minValue}` : null, t.maxValue != null ? `max ${t.maxValue}` : null].filter(Boolean).join(", ");
+        return `• ${t.name} [${t.category}]: ${t.companyField} — ${parts}${t.unit ? " " + t.unit : ""}`;
+      }
+      if (t.dataType === "BOOLEAN" && t.boolField) {
+        return `• ${t.name} [${t.category}]: ${t.boolField} must be ${t.boolTarget}`;
+      }
+      return `• ${t.name} [${t.category}]: ${t.notes ?? t.description ?? "qualitative signal"}`;
+    }).join("\n");
 
-  const feedbackSection = [
-    interested.length > 0
-      ? `Investor LIKED: ${interested.map(f => `${f.company.name} (${f.company.sector}/${f.company.subSector})`).join(", ")}`
-      : "",
-    passed.length > 0
-      ? `Investor PASSED: ${passed.map(f => `${f.company.name}${f.notes ? " — " + f.notes : ""}`).join("; ")}`
-      : "",
-  ].filter(Boolean).join("\n");
+    const existingNames = existingCompanies.map(c => c.name).join(", ") || "None yet";
 
-  const prompt = `You are helping a growth equity investor build a curated list of B2B SaaS investment leads.
+    const interested = recentFeedback.filter(f => ["INTERESTED", "HIGH_PRIORITY"].includes(f.signal));
+    const passed = recentFeedback.filter(f => f.signal === "PASS");
+
+    const feedbackSection = [
+      interested.length > 0
+        ? `Investor LIKED: ${interested.map(f => `${f.company.name} (${f.company.sector}/${f.company.subSector})`).join(", ")}`
+        : "",
+      passed.length > 0
+        ? `Investor PASSED: ${passed.map(f => `${f.company.name}${f.notes ? " — " + f.notes : ""}`).join("; ")}`
+        : "",
+    ].filter(Boolean).join("\n");
+
+    const prompt = `You are helping a growth equity investor build a curated list of B2B SaaS investment leads.
 
 INVESTOR THESIS:
 ${thesisSummary}
@@ -89,57 +98,63 @@ Return ONLY a valid JSON array — no explanation, no markdown fences, just the 
   "source": "Where an investor would find this: e.g. Crunchbase, G2 category, Grata search, referral network"
 }`;
 
-  const message = await anthropic.messages.create({
-    model: "claude-opus-4-6",
-    max_tokens: 4096,
-    messages: [{ role: "user", content: prompt }],
-  });
+    const message = await anthropic.messages.create({
+      model: "claude-opus-4-6",
+      max_tokens: 4096,
+      messages: [{ role: "user", content: prompt }],
+    });
 
-  const rawText = message.content[0].type === "text" ? message.content[0].text.trim() : "";
+    const rawText = message.content[0].type === "text" ? message.content[0].text.trim() : "";
 
-  // Extract JSON array robustly — handle any surrounding text or code fences
-  const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) {
-    console.error("Claude response did not contain a JSON array:", rawText.slice(0, 300));
-    return NextResponse.json({ error: "Failed to parse lead suggestions from AI response" }, { status: 500 });
+    // Extract JSON array robustly — handle any surrounding text or code fences
+    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      console.error("Claude response did not contain a JSON array:", rawText.slice(0, 300));
+      return NextResponse.json({ error: "AI response was not valid JSON. Try again." }, { status: 500 });
+    }
+
+    let suggestions: Record<string, unknown>[];
+    try {
+      suggestions = JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      console.error("JSON parse error:", e);
+      return NextResponse.json({ error: "AI returned malformed JSON. Try again." }, { status: 500 });
+    }
+
+    const now = new Date();
+    const created = await Promise.all(
+      suggestions.slice(0, toGenerate).map(s =>
+        db.company.create({
+          data: {
+            name: String(s.name ?? "Unknown"),
+            website: s.website ? String(s.website) : null,
+            description: s.description ? String(s.description) : null,
+            sector: s.sector ? String(s.sector) : null,
+            subSector: s.subSector ? String(s.subSector) : null,
+            geography: s.geography ? String(s.geography) : null,
+            arrEstimate: s.arrEstimate != null ? Number(s.arrEstimate) : null,
+            arrGrowth: s.arrGrowth != null ? Number(s.arrGrowth) : null,
+            nrrEstimate: s.nrrEstimate != null ? Number(s.nrrEstimate) : null,
+            grossMargin: s.grossMargin != null ? Number(s.grossMargin) : null,
+            employees: s.employees != null ? Number(s.employees) : null,
+            founded: s.founded != null ? Number(s.founded) : null,
+            stage: s.stage ? String(s.stage) : null,
+            status: "LEAD",
+            priority: "MEDIUM",
+            source: s.source ? String(s.source) : "AI recommendation",
+            recommendationRationale: s.recommendationRationale ? String(s.recommendationRationale) : null,
+            recommendationScore: s.recommendationScore != null ? Number(s.recommendationScore) : null,
+            recommendedAt: now,
+          },
+        })
+      )
+    );
+
+    return NextResponse.json({ generated: created.length });
+
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Lead generation error:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  let suggestions: Record<string, unknown>[];
-  try {
-    suggestions = JSON.parse(jsonMatch[0]);
-  } catch (e) {
-    console.error("JSON parse error:", e);
-    return NextResponse.json({ error: "AI returned malformed JSON" }, { status: 500 });
-  }
-
-  const now = new Date();
-  const created = await Promise.all(
-    suggestions.slice(0, toGenerate).map(s =>
-      db.company.create({
-        data: {
-          name: String(s.name ?? "Unknown"),
-          website: s.website ? String(s.website) : null,
-          description: s.description ? String(s.description) : null,
-          sector: s.sector ? String(s.sector) : null,
-          subSector: s.subSector ? String(s.subSector) : null,
-          geography: s.geography ? String(s.geography) : null,
-          arrEstimate: s.arrEstimate != null ? Number(s.arrEstimate) : null,
-          arrGrowth: s.arrGrowth != null ? Number(s.arrGrowth) : null,
-          nrrEstimate: s.nrrEstimate != null ? Number(s.nrrEstimate) : null,
-          grossMargin: s.grossMargin != null ? Number(s.grossMargin) : null,
-          employees: s.employees != null ? Number(s.employees) : null,
-          founded: s.founded != null ? Number(s.founded) : null,
-          stage: s.stage ? String(s.stage) : null,
-          status: "LEAD",
-          priority: "MEDIUM",
-          source: s.source ? String(s.source) : "AI recommendation",
-          recommendationRationale: s.recommendationRationale ? String(s.recommendationRationale) : null,
-          recommendationScore: s.recommendationScore != null ? Number(s.recommendationScore) : null,
-          recommendedAt: now,
-        },
-      })
-    )
-  );
-
-  return NextResponse.json({ generated: created.length });
 }
