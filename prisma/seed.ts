@@ -561,6 +561,144 @@ async function main() {
   }
   console.log(`  ✓ ${thesisData.length} thesis criteria`);
 
+  // --- Portfolio companies (INVESTED status with investment record + KPI history) ---
+  // Two demo portfolio companies so the Portfolio page is functional on first load.
+  const portfolioCompaniesData = [
+    {
+      id: "co_fieldwork_ai",
+      name: "Fieldwork AI",
+      website: "https://fieldwork.ai",
+      description: "AI-powered field service management platform for HVAC, plumbing, and electrical contractors. Vertical SaaS with deep scheduling and dispatch automation.",
+      sector: "B2B SaaS",
+      subSector: "Field Service Management",
+      geography: "Austin, TX",
+      arrEstimate: 6.2,
+      arrGrowth: 78,
+      nrrEstimate: 118,
+      grossMargin: 74,
+      employees: 48,
+      founded: 2020,
+      stage: "Series A",
+      status: "INVESTED",
+      priority: "HIGH",
+      source: "Proprietary sourcing",
+    },
+    {
+      id: "co_clearpath_compliance",
+      name: "ClearPath Compliance",
+      website: "https://clearpathcompliance.com",
+      description: "Regulatory compliance workflow platform for mid-market financial services firms. Replaces spreadsheet-based compliance tracking with automated evidence collection.",
+      sector: "FinTech",
+      subSector: "RegTech",
+      geography: "New York, NY",
+      arrEstimate: 4.1,
+      arrGrowth: 95,
+      nrrEstimate: 124,
+      grossMargin: 79,
+      employees: 32,
+      founded: 2021,
+      stage: "Series A",
+      status: "MONITORING",
+      priority: "HIGH",
+      source: "Conference — RegTech Summit",
+    },
+  ];
+
+  for (const data of portfolioCompaniesData) {
+    await db.company.upsert({
+      where: { id: data.id },
+      update: {},
+      create: data,
+    });
+  }
+  console.log(`  ✓ ${portfolioCompaniesData.length} portfolio companies`);
+
+  // Investment records for portfolio companies
+  const investmentData = [
+    {
+      id: "inv_fieldwork_ai",
+      companyId: "co_fieldwork_ai",
+      investedAmount: 4.0,
+      ownershipPct: 18.5,
+      investmentDate: new Date("2023-03-15"),
+      roundType: "Series A",
+      preMoneyVal: 18.0,
+      currentValuation: 27.0,
+      proRataRights: true,
+      boardSeat: true,
+      leadInvestor: true,
+      coInvestors: "Operator Collective, Reach Capital",
+      reserveAmount: 2.5,
+      moic: 1.7,
+      notes: "Strong product-market fit in HVAC vertical. Expanding into electrical. ACV growing from $8K to $14K as they move upmarket. Next milestone: $10M ARR.",
+    },
+    {
+      id: "inv_clearpath",
+      companyId: "co_clearpath_compliance",
+      investedAmount: 2.5,
+      ownershipPct: 14.2,
+      investmentDate: new Date("2023-09-01"),
+      roundType: "Series A",
+      preMoneyVal: 15.0,
+      currentValuation: 21.0,
+      proRataRights: true,
+      boardSeat: false,
+      leadInvestor: false,
+      coInvestors: "Primary Venture Partners",
+      reserveAmount: 1.5,
+      moic: 1.5,
+      notes: "Board observer seat. Regulatory tailwinds from new SEC requirements. Key watch item: sales hire in Q2 — hiring VP of Sales.",
+    },
+  ];
+
+  for (const inv of investmentData) {
+    await db.portfolioInvestment.upsert({
+      where: { id: inv.id },
+      update: {},
+      create: inv,
+    });
+  }
+  console.log(`  ✓ ${investmentData.length} investment records`);
+
+  // KPI snapshots (last 4 quarters per company)
+  const kpiData = [
+    // Fieldwork AI
+    { id: "kpi_fw_q1_2024", companyId: "co_fieldwork_ai", period: "Q1 2024", arr: 4.1, arrGrowth: 68, nrr: 112, grossMargin: 71, employees: 36, burn: 0.45, runway: 22 },
+    { id: "kpi_fw_q2_2024", companyId: "co_fieldwork_ai", period: "Q2 2024", arr: 4.8, arrGrowth: 72, nrr: 115, grossMargin: 72, employees: 40, burn: 0.48, runway: 20 },
+    { id: "kpi_fw_q3_2024", companyId: "co_fieldwork_ai", period: "Q3 2024", arr: 5.5, arrGrowth: 75, nrr: 117, grossMargin: 73, employees: 44, burn: 0.52, runway: 19 },
+    { id: "kpi_fw_q4_2024", companyId: "co_fieldwork_ai", period: "Q4 2024", arr: 6.2, arrGrowth: 78, nrr: 118, grossMargin: 74, employees: 48, burn: 0.55, runway: 17, notes: "Closed 3 new MSAs with regional HVAC chains. ARPU up 22% QoQ." },
+    // ClearPath Compliance
+    { id: "kpi_cp_q1_2024", companyId: "co_clearpath_compliance", period: "Q1 2024", arr: 2.4, arrGrowth: 82, nrr: 119, grossMargin: 76, employees: 24, burn: 0.35, runway: 24 },
+    { id: "kpi_cp_q2_2024", companyId: "co_clearpath_compliance", period: "Q2 2024", arr: 3.0, arrGrowth: 88, nrr: 121, grossMargin: 77, employees: 27, burn: 0.38, runway: 22 },
+    { id: "kpi_cp_q3_2024", companyId: "co_clearpath_compliance", period: "Q3 2024", arr: 3.6, arrGrowth: 91, nrr: 122, grossMargin: 78, employees: 30, burn: 0.40, runway: 20 },
+    { id: "kpi_cp_q4_2024", companyId: "co_clearpath_compliance", period: "Q4 2024", arr: 4.1, arrGrowth: 95, nrr: 124, grossMargin: 79, employees: 32, burn: 0.42, runway: 18, notes: "Renewed all 3 enterprise contracts. Expansion into wealth management segment." },
+  ];
+
+  for (const kpi of kpiData) {
+    await db.portfolioKPISnapshot.upsert({
+      where: { id: kpi.id },
+      update: {},
+      create: kpi,
+    });
+  }
+  console.log(`  ✓ ${kpiData.length} KPI snapshots`);
+
+  // Sample LP contacts
+  const lpContactData = [
+    { id: "lp_family_office_1", name: "Robert Huang", firm: "Huang Family Office", email: "rhuang@huangfo.com", commitment: 5.0, type: "LP", notes: "Long-term LP since Fund I. Prefers quarterly calls." },
+    { id: "lp_endowment_1", name: "Amanda Torres", firm: "Westlake University Endowment", email: "atorres@westlake.edu", commitment: 10.0, type: "LP", notes: "Endowment mandate requires ESG disclosure annually." },
+    { id: "lp_coinvestor_1", name: "James Park", firm: "Operator Collective", email: "jpark@operatorcollective.com", commitment: 2.0, type: "CO_INVESTOR", notes: "Co-invested in Fieldwork AI. Strong operator network in field service." },
+  ];
+
+  for (const lp of lpContactData) {
+    await db.lPContact.upsert({
+      where: { id: lp.id },
+      update: {},
+      create: lp,
+    });
+  }
+  console.log(`  ✓ ${lpContactData.length} LP contacts`);
+
   console.log("\n✅ Seed complete!");
 }
 

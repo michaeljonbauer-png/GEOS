@@ -47,6 +47,14 @@ function TrendBadge({ growth }: { growth: number | null | undefined }) {
   return <span className={`flex items-center gap-0.5 text-xs font-semibold ${color}`}><Icon size={11} />{growth > 0 ? "+" : ""}{growth.toFixed(0)}%</span>;
 }
 
+function RuleOf40Badge({ arrGrowth, grossMargin }: { arrGrowth: number | null | undefined; grossMargin: number | null | undefined }) {
+  if (!arrGrowth && arrGrowth !== 0) return <span className="text-slate-400 text-xs">—</span>;
+  if (!grossMargin && grossMargin !== 0) return <span className="text-slate-400 text-xs">—</span>;
+  const score = arrGrowth + grossMargin;
+  const color = score >= 40 ? "text-green-700 bg-green-50" : score >= 20 ? "text-amber-700 bg-amber-50" : "text-red-700 bg-red-50";
+  return <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${color}`}>{score.toFixed(0)}</span>;
+}
+
 export default function PortfolioPage() {
   const { toast } = useToast();
   const [companies, setCompanies] = useState<PortfolioCompany[]>([]);
@@ -94,7 +102,17 @@ export default function PortfolioPage() {
   // Portfolio summary
   const totalDeployed = companies.reduce((s, c) => s + (c.investment?.investedAmount ?? 0), 0);
   const totalCurrentVal = companies.reduce((s, c) => s + (c.investment?.currentValuation ?? 0), 0);
+  // TVPI = (unrealized current value + distributions) / invested capital
+  // Since GEOS doesn't yet track distributions, TVPI = current value / invested (same as portfolio MOIC)
   const portfolioMOIC = totalDeployed > 0 ? totalCurrentVal / totalDeployed : null;
+
+  // CAGR for a single investment: (currentVal / invested)^(1/years) - 1
+  const calcCAGR = (invested: number | null, currentVal: number | null, investmentDate: string | null): number | null => {
+    if (!invested || !currentVal || !investmentDate) return null;
+    const years = (Date.now() - new Date(investmentDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+    if (years < 0.1) return null;
+    return (Math.pow(currentVal / invested, 1 / years) - 1) * 100;
+  };
 
   if (loading) return <div className="p-8 text-slate-400 text-sm">Loading portfolio…</div>;
 
@@ -119,7 +137,7 @@ export default function PortfolioPage() {
         <div className="px-4 py-3 bg-white border-b border-slate-200 space-y-1.5">
           <div className="flex justify-between text-xs"><span className="text-slate-500">Total deployed</span><span className="font-semibold">{totalDeployed ? `$${totalDeployed.toFixed(1)}M` : "—"}</span></div>
           <div className="flex justify-between text-xs"><span className="text-slate-500">Current value</span><span className="font-semibold">{totalCurrentVal ? `$${totalCurrentVal.toFixed(1)}M` : "—"}</span></div>
-          <div className="flex justify-between text-xs"><span className="text-slate-500">Portfolio MOIC</span><span className={`font-bold ${portfolioMOIC && portfolioMOIC >= 1.5 ? "text-green-600" : "text-slate-700"}`}>{portfolioMOIC ? `${portfolioMOIC.toFixed(2)}×` : "—"}</span></div>
+          <div className="flex justify-between text-xs"><span className="text-slate-500">TVPI</span><span className={`font-bold ${portfolioMOIC && portfolioMOIC >= 1.5 ? "text-green-600" : "text-slate-700"}`}>{portfolioMOIC ? `${portfolioMOIC.toFixed(2)}×` : "—"}</span></div>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
           {companies.map(c => (
@@ -171,6 +189,18 @@ export default function PortfolioPage() {
                           <Input type="number" step="0.01" className="mt-1 h-8 text-sm" value={(inv[field] as number) ?? ""} onChange={e => setInv(p => ({ ...p, [field]: e.target.value || null }))} />
                         </div>
                       ))}
+                      {/* CAGR — derived, read-only */}
+                      {(() => {
+                        const cagr = calcCAGR(inv.investedAmount, inv.currentValuation, inv.investmentDate);
+                        if (!cagr) return null;
+                        const color = cagr >= 30 ? "text-green-700" : cagr >= 15 ? "text-amber-700" : "text-red-600";
+                        return (
+                          <div>
+                            <Label className="text-xs text-slate-400">Implied CAGR (calculated)</Label>
+                            <p className={`mt-1 text-lg font-bold ${color}`}>{cagr.toFixed(1)}%</p>
+                          </div>
+                        );
+                      })()}
                       <div>
                         <Label className="text-xs">Round Type</Label>
                         <Input className="mt-1 h-8 text-sm" value={inv.roundType ?? ""} onChange={e => setInv(p => ({ ...p, roundType: e.target.value || null }))} placeholder="Seed, Series A…" />
@@ -253,8 +283,8 @@ export default function PortfolioPage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead><tr className="border-b border-slate-200">
-                        {["Period", "ARR", "Growth", "NRR", "GM", "Headcount", "Burn/mo", "Runway", "Notes"].map(h => (
-                          <th key={h} className="text-left text-xs text-slate-500 font-medium pb-2 pr-4">{h}</th>
+                        {["Period", "ARR", "Growth", "NRR", "GM", "Rule of 40", "Headcount", "Burn/mo", "Runway", "Notes"].map(h => (
+                          <th key={h} className={`text-left text-xs font-medium pb-2 pr-4 ${h === "Rule of 40" ? "text-slate-700" : "text-slate-500"}`}>{h}</th>
                         ))}
                       </tr></thead>
                       <tbody>{kpis.map(k => (
@@ -264,6 +294,7 @@ export default function PortfolioPage() {
                           <td className="py-2 pr-4"><TrendBadge growth={k.arrGrowth} /></td>
                           <td className="py-2 pr-4">{k.nrr ? `${k.nrr}%` : "—"}</td>
                           <td className="py-2 pr-4">{k.grossMargin ? `${k.grossMargin}%` : "—"}</td>
+                          <td className="py-2 pr-4"><RuleOf40Badge arrGrowth={k.arrGrowth} grossMargin={k.grossMargin} /></td>
                           <td className="py-2 pr-4">{k.employees ?? "—"}</td>
                           <td className="py-2 pr-4">{k.burn ? `$${k.burn}M` : "—"}</td>
                           <td className="py-2 pr-4">{k.runway ? `${k.runway}mo` : "—"}</td>

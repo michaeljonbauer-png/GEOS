@@ -17,7 +17,27 @@ interface LPUpdate { id: string; period: string; title: string; body: string; st
 
 const TYPE_COLORS: Record<string, string> = { LP: "bg-blue-100 text-blue-700", CO_INVESTOR: "bg-violet-100 text-violet-700", ADVISOR: "bg-amber-100 text-amber-700" };
 
-const UPDATE_TEMPLATE = `## Portfolio Highlights
+interface PortfolioSnapshot {
+  numCompanies: number;
+  totalDeployed: number;
+  totalCurrentVal: number;
+  totalReserves: number;
+  tvpi: number | null;
+  companies: {
+    name: string;
+    sector: string | null;
+    status: string;
+    arrEstimate: number | null;
+    arrGrowth: number | null;
+    nrrEstimate: number | null;
+    investment: { investedAmount: number | null; ownershipPct: number | null; moic: number | null; currentValuation: number | null } | null;
+    latestKPI: { period: string; arr: number | null; arrGrowth: number | null; nrr: number | null } | null;
+  }[];
+}
+
+function buildTemplate(period: string, snap: PortfolioSnapshot | null): string {
+  if (!snap || snap.numCompanies === 0) {
+    return `## Portfolio Highlights
 
 - [Company A] grew ARR from $XM to $YM (+Z% YoY), NRR at X%
 - [Company B] closed its Series A at $XM valuation
@@ -25,7 +45,7 @@ const UPDATE_TEMPLATE = `## Portfolio Highlights
 ## Fund Metrics
 
 - Total deployed: $XM across X companies
-- Portfolio MOIC: X.Xx (unrealized)
+- TVPI: X.Xx (unrealized)
 - Follow-on reserves: $XM
 
 ## Key Risks & Watchlist
@@ -39,6 +59,45 @@ const UPDATE_TEMPLATE = `## Portfolio Highlights
 
 ---
 *This update is confidential and intended solely for fund LPs.*`;
+  }
+
+  const highlights = snap.companies.map(c => {
+    const kpi = c.latestKPI;
+    const arr = kpi?.arr ?? c.arrEstimate;
+    const growth = kpi?.arrGrowth ?? c.arrGrowth;
+    const nrr = kpi?.nrr ?? c.nrrEstimate;
+    const arrStr = arr ? `$${arr}M ARR` : "ARR TBD";
+    const growthStr = growth ? `+${growth.toFixed(0)}% YoY` : "";
+    const nrrStr = nrr ? `, NRR ${nrr.toFixed(0)}%` : "";
+    return `- **${c.name}** — ${arrStr}${growthStr ? ` (${growthStr})` : ""}${nrrStr}`;
+  }).join("\n");
+
+  const deployedStr = snap.totalDeployed > 0 ? `$${snap.totalDeployed.toFixed(1)}M` : "TBD";
+  const tvpiStr = snap.tvpi ? `${snap.tvpi.toFixed(2)}×` : "TBD";
+  const reserveStr = snap.totalReserves > 0 ? `$${snap.totalReserves.toFixed(1)}M` : "TBD";
+
+  return `## Portfolio Highlights — ${period}
+
+${highlights}
+
+## Fund Metrics
+
+- Total deployed: ${deployedStr} across ${snap.numCompanies} compan${snap.numCompanies === 1 ? "y" : "ies"}
+- TVPI: ${tvpiStr} (unrealized)
+- Follow-on reserves committed: ${reserveStr}
+
+## Key Risks & Watchlist
+
+- [Add any companies requiring closer monitoring or board attention]
+
+## What's Next
+
+- Actively evaluating new opportunities in [sector]
+- Upcoming board meetings: [dates]
+
+---
+*This update is confidential and intended solely for fund LPs.*`;
+}
 
 export default function LPCommunicationsPage() {
   const { toast } = useToast();
@@ -79,7 +138,11 @@ export default function LPCommunicationsPage() {
 
   const createUpdate = async () => {
     if (!newUpdate.period || !newUpdate.title) return;
-    const res = await fetch("/api/lp/updates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...newUpdate, body: UPDATE_TEMPLATE }) });
+    // Fetch live portfolio data to pre-populate the template with real numbers
+    let snap: PortfolioSnapshot | null = null;
+    try { snap = await fetch("/api/lp/portfolio-snapshot").then(r => r.json()); } catch { /* use blank template */ }
+    const body = buildTemplate(newUpdate.period, snap);
+    const res = await fetch("/api/lp/updates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...newUpdate, body }) });
     if (res.ok) { const created = await res.json(); setUpdates(prev => [created, ...prev]); setSelectedUpdate(created); setEditBody(created.body); setShowNewUpdate(false); setNewUpdate({ period: "", title: "" }); }
   };
 

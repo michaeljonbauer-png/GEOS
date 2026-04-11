@@ -13,6 +13,7 @@ import {
   BarChart3,
   Briefcase,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,8 +34,7 @@ const dealItems = [
 export default function Sidebar() {
   const pathname = usePathname();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const navLink = (href: string, label: string, Icon: any) => {
+  const navLink = (href: string, label: string, Icon: LucideIcon) => {
     const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
     return (
       <Link
