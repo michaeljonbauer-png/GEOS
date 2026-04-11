@@ -38,6 +38,10 @@ model Company {
   acv           Float?   // average contract value in $K
   thesisFitScore Float?  // cached thesis fit score (0-100)
   productRepScore Float? // cached product reputation score (0-10)
+  // AI lead recommendation fields
+  recommendationRationale String?  // why this fits the thesis
+  recommendedAt           DateTime? // when it was surfaced as a lead
+  recommendationScore     Float?   // AI fit score 0-100
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
