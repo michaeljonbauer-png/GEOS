@@ -20,6 +20,19 @@ export async function POST() {
 
     // How many leads do we need to reach the target?
     const currentCount = await db.company.count({ where: { status: "LEAD" } });
+
+    // Trim excess leads if somehow we ended up with more than the target
+    if (currentCount > QUEUE_TARGET) {
+      const excess = await db.company.findMany({
+        where: { status: "LEAD" },
+        orderBy: [{ recommendationScore: "asc" }, { recommendedAt: "asc" }],
+        take: currentCount - QUEUE_TARGET,
+        select: { id: true },
+      });
+      await db.company.deleteMany({ where: { id: { in: excess.map(l => l.id) } } });
+      return NextResponse.json({ generated: 0, message: "Trimmed queue to 10" });
+    }
+
     const toGenerate = Math.max(0, QUEUE_TARGET - currentCount);
 
     if (toGenerate === 0) {

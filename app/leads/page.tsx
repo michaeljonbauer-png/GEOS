@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   Sparkles, ThumbsUp, ThumbsDown, ExternalLink,
@@ -202,6 +202,8 @@ export default function LeadsPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  // Prevent concurrent generate calls (race condition that creates excess leads)
+  const generatingRef = useRef(false);
 
   const fetchLeads = useCallback(async (): Promise<Lead[]> => {
     const res = await fetch("/api/leads");
@@ -210,6 +212,8 @@ export default function LeadsPage() {
   }, []);
 
   const topUp = useCallback(async () => {
+    if (generatingRef.current) return;
+    generatingRef.current = true;
     setGenerating(true);
     try {
       const res = await fetch("/api/leads/generate", { method: "POST" });
@@ -235,6 +239,7 @@ export default function LeadsPage() {
       });
     } finally {
       setGenerating(false);
+      generatingRef.current = false;
     }
   }, [fetchLeads, toast]);
 
