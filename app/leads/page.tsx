@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Sparkles, ThumbsUp, ThumbsDown, ExternalLink,
   RefreshCw, TrendingUp, Users, DollarSign, AlertCircle,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -89,19 +90,31 @@ function LeadCard({
   lead,
   onPursue,
   onPass,
+  onRefresh,
   processing,
+  refreshing,
 }: {
   lead: Lead;
   onPursue: () => void;
   onPass: () => void;
+  onRefresh: () => void;
   processing: boolean;
+  refreshing: boolean;
 }) {
   return (
     <div
-      className={`bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${
+      className={`relative bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${
         processing ? "opacity-40 scale-[0.98] pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"
-      }`}
+      } ${refreshing ? "ring-2 ring-violet-300 ring-offset-1" : ""}`}
     >
+      {refreshing && (
+        <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] rounded-xl flex items-center justify-center z-10 pointer-events-none">
+          <div className="flex items-center gap-2 bg-violet-600 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg">
+            <Search size={12} className="animate-pulse" />
+            Refreshing from the web…
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
@@ -170,27 +183,38 @@ function LeadCard({
       )}
 
       {/* Actions */}
-      <div className="flex gap-2 mt-auto">
-        <Button
-          size="sm"
-          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
-          onClick={onPursue}
+      <div className="flex flex-col gap-2 mt-auto">
+        <button
+          onClick={onRefresh}
+          disabled={refreshing}
+          className="flex items-center justify-center gap-1.5 text-[10px] font-medium text-violet-600 hover:text-violet-800 hover:bg-violet-50 rounded-md py-1 transition-colors disabled:opacity-50"
+          title="Re-research this company with live web data (latest funding, headcount, ARR)"
         >
-          <ThumbsUp size={12} className="mr-1" /> Pursue
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1 text-red-500 hover:bg-red-50 border-red-200 text-xs"
-          onClick={onPass}
-        >
-          <ThumbsDown size={12} className="mr-1" /> Pass
-        </Button>
-        <Link href={`/companies/${lead.id}`}>
-          <Button size="sm" variant="outline" className="px-2.5">
-            <ExternalLink size={12} />
+          <Search size={10} className={refreshing ? "animate-pulse" : ""} />
+          {refreshing ? "Verifying with live web data…" : "Refresh with live web data"}
+        </button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+            onClick={onPursue}
+          >
+            <ThumbsUp size={12} className="mr-1" /> Pursue
           </Button>
-        </Link>
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 text-red-500 hover:bg-red-50 border-red-200 text-xs"
+            onClick={onPass}
+          >
+            <ThumbsDown size={12} className="mr-1" /> Pass
+          </Button>
+          <Link href={`/companies/${lead.id}`}>
+            <Button size="sm" variant="outline" className="px-2.5">
+              <ExternalLink size={12} />
+            </Button>
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -202,6 +226,7 @@ export default function LeadsPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
   // Prevent concurrent generate calls (race condition that creates excess leads)
   const generatingRef = useRef(false);
 
@@ -252,6 +277,45 @@ export default function LeadsPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const refreshLead = async (lead: Lead) => {
+    setRefreshingId(lead.id);
+    try {
+      const res = await fetch(`/api/companies/${lead.id}/refresh`, { method: "POST" });
+      const data = await res.json() as {
+        company?: Lead;
+        changed?: string[];
+        confidence?: string;
+        notes?: string;
+        error?: string;
+      };
+      if (!res.ok) {
+        toast({
+          title: "Refresh failed",
+          description: data.error ?? "Unknown error.",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Merge updated fields back into the card in place
+      if (data.company) {
+        setLeads(prev => prev.map(l => (l.id === lead.id ? { ...l, ...data.company! } : l)));
+      }
+      const changedCount = data.changed?.length ?? 0;
+      toast({
+        title: changedCount > 0 ? `Updated ${lead.name}` : `No changes found for ${lead.name}`,
+        description: data.notes ?? (changedCount > 0 ? `Refreshed ${changedCount} fields.` : "Existing data appears current."),
+      });
+    } catch (err) {
+      toast({
+        title: "Refresh failed",
+        description: err instanceof Error ? err.message : "Network error.",
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshingId(null);
+    }
+  };
 
   const processLead = async (lead: Lead, action: "pursue" | "pass") => {
     setProcessingId(lead.id);
@@ -353,7 +417,9 @@ export default function LeadsPage() {
               lead={lead}
               onPursue={() => processLead(lead, "pursue")}
               onPass={() => processLead(lead, "pass")}
+              onRefresh={() => refreshLead(lead)}
               processing={processingId === lead.id}
+              refreshing={refreshingId === lead.id}
             />
           ))}
           {Array.from({ length: skeletonCount }).map((_, i) => (

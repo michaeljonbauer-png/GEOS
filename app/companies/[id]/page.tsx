@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import {
   ArrowLeft, ExternalLink, Linkedin, Mail, Phone, Calendar,
   Plus, Pencil, Trash2, Save, X, Send, StickyNote, Star,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -125,6 +126,7 @@ export default function CompanyDetailPage() {
   const [interactionForm, setInteractionForm] = useState({ type: "EMAIL", direction: "OUTBOUND", subject: "", content: "", followUpDate: "" });
   const [noteText, setNoteText] = useState("");
   const [sources, setSources] = useState<Record<string, { sourceLabel: string; sourceUrl: string | null; capturedAt?: string }>>({});
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(() => {
     Promise.all([
@@ -238,6 +240,36 @@ export default function CompanyDetailPage() {
     }
   };
 
+  const refreshResearch = async () => {
+    setRefreshing(true);
+    try {
+      const res = await fetch(`/api/companies/${id}/refresh`, { method: "POST" });
+      const data = await res.json() as { changed?: string[]; confidence?: string; notes?: string; error?: string };
+      if (!res.ok) {
+        toast({
+          title: "Refresh failed",
+          description: data.error ?? "Unknown error.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const changedCount = data.changed?.length ?? 0;
+      toast({
+        title: changedCount > 0 ? `Updated ${changedCount} fields` : "No changes found",
+        description: data.notes ?? (changedCount > 0 ? `Refreshed: ${data.changed!.join(", ")}` : "Existing data appears current."),
+      });
+      load();
+    } catch (err) {
+      toast({
+        title: "Refresh failed",
+        description: err instanceof Error ? err.message : "Network error.",
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const deleteCompany = async () => {
     if (!confirm(`Delete ${company?.name}? This cannot be undone.`)) return;
     await fetch(`/api/companies/${id}`, { method: "DELETE" });
@@ -334,6 +366,17 @@ export default function CompanyDetailPage() {
                 source="detail"
                 currentSignal={company.feedback?.[0]?.signal as import("@/lib/thesis").FeedbackSignal | undefined}
               />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refreshResearch}
+                disabled={refreshing}
+                className="text-violet-600 border-violet-200 hover:bg-violet-50"
+                title="Re-research this company with live web data (latest funding, headcount, ARR)"
+              >
+                <Search size={14} className={refreshing ? "animate-pulse" : ""} />
+                {refreshing ? "Refreshing…" : "Refresh research"}
+              </Button>
               <Link href={`/outreach?companyId=${company.id}`}>
                 <Button variant="outline" size="sm">
                   <Send size={14} /> Outreach
