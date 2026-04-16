@@ -167,8 +167,18 @@ ACCURACY > COMPLETENESS: If unsure whether a company fits, pick a different one.
     } catch (searchErr) {
       // If web search fails (billing, rate limit, etc.) degrade gracefully to no-search
       const msg = searchErr instanceof Error ? searchErr.message : String(searchErr);
-      const isRecoverable = /credit balance|rate_limit|529|overloaded/i.test(msg);
+      const isBilling = /credit balance/i.test(msg);
+      const isRecoverable = isBilling || /rate_limit|529|overloaded/i.test(msg);
       if (!isRecoverable) throw searchErr; // surface unexpected errors
+
+      if (isBilling) {
+        // Credits exhausted — no point retrying without search either
+        return NextResponse.json(
+          { error: "Anthropic credit balance is too low. Go to console.anthropic.com → Plans & Billing to add credits." },
+          { status: 402 }
+        );
+      }
+
       console.warn("Web search unavailable, falling back to no-search generation:", msg);
       usedWebSearch = false;
       rawText = await callClaude(false);
