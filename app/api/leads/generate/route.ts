@@ -6,11 +6,35 @@ export const dynamic = "force-dynamic";
 
 const QUEUE_TARGET = 9;
 
-// Long-running: web search + multiple Claude turns can take 60–120s
+// Two-phase generation: candidate selection (~5s) + per-company funding research (~60-90s)
 export const maxDuration = 300;
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function isRateLimitError(err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err);
+  const status = (err as { status?: number }).status;
+  return status === 429 || /rate.?limit/i.test(msg);
+}
+
+function isBillingError(err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err);
+  const status = (err as { status?: number }).status;
+  return status === 402 || /credit balance/i.test(msg);
+}
+
+// Use total funding + employee count to compute a floor ARR estimate in $M.
+// This prevents the common failure of under-estimating well-funded companies.
+function arrFloor(totalFundingM: number | null, employees: number | null): number | null {
+  const fromFunding = totalFundingM != null ? totalFundingM / 5 : null;  // ~5x ARR multiple
+  const fromEmployees = employees != null ? (employees * 0.25) : null;   // $250K ARR/employee
+  const candidates = [fromFunding, fromEmployees].filter((v): v is number => v != null);
+  return candidates.length > 0 ? Math.max(...candidates) : null;
+}
+
+// ─── Route ──────────────────────────────────────────────────────────────────
+
 export async function POST() {
-  // Validate API key up front so we can return a clear error
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
       { error: "ANTHROPIC_API_KEY is not set. Add it in Railway → your service → Variables." },
@@ -21,10 +45,8 @@ export async function POST() {
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    // How many leads do we need to reach the target?
     const currentCount = await db.company.count({ where: { status: "LEAD" } });
 
-    // Trim excess leads if somehow we ended up with more than the target
     if (currentCount > QUEUE_TARGET) {
       const excess = await db.company.findMany({
         where: { status: "LEAD" },
@@ -37,19 +59,18 @@ export async function POST() {
     }
 
     const toGenerate = Math.max(0, QUEUE_TARGET - currentCount);
-
     if (toGenerate === 0) {
       return NextResponse.json({ generated: 0, message: "Queue is already full" });
     }
 
-    // --- Build context for Claude ---
+    // ── Phase 1: Build context ───────────────────────────────────────────────
     const [thesisCriteria, existingCompanies, recentFeedback] = await Promise.all([
       db.thesisCriterion.findMany({ where: { isActive: true }, orderBy: { order: "asc" } }),
       db.company.findMany({ select: { name: true }, orderBy: { createdAt: "desc" }, take: 30 }),
       db.companyFeedback.findMany({
-        include: { company: { select: { name: true, sector: true, subSector: true, arrEstimate: true } } },
+        include: { company: { select: { name: true, sector: true, subSector: true } } },
         orderBy: { createdAt: "desc" },
-        take: 40,
+        take: 30,
       }),
     ]);
 
@@ -68,189 +89,189 @@ export async function POST() {
 
     const interested = recentFeedback.filter(f => ["INTERESTED", "HIGH_PRIORITY"].includes(f.signal));
     const passed = recentFeedback.filter(f => f.signal === "PASS");
-
     const feedbackSection = [
-      interested.length > 0
-        ? `Investor LIKED: ${interested.map(f => `${f.company.name} (${f.company.sector}/${f.company.subSector})`).join(", ")}`
-        : "",
-      passed.length > 0
-        ? `Investor PASSED: ${passed.map(f => `${f.company.name}${f.notes ? " — " + f.notes : ""}`).join("; ")}`
-        : "",
+      interested.length > 0 ? `Investor LIKED: ${interested.map(f => f.company.name).join(", ")}` : "",
+      passed.length > 0 ? `Investor PASSED: ${passed.map(f => `${f.company.name}${f.notes ? " — " + f.notes : ""}`).join("; ")}` : "",
     ].filter(Boolean).join("\n");
 
     const today = new Date().toISOString().slice(0, 10);
 
-    const prompt = `You are helping a growth equity investor build a curated list of B2B SaaS investment leads. Today is ${today}.
+    // ── Phase 2: Select candidates (no search, fast & cheap) ─────────────────
+    const selectionPrompt = `You are helping a growth equity investor identify B2B SaaS investment leads. Today is ${today}.
 
 INVESTOR THESIS:
 ${thesisSummary}
 
-COMPANIES ALREADY IN PIPELINE — do not suggest these or close variants:
+ALREADY IN PIPELINE — skip these and close variants:
 ${existingNames}
 
-${feedbackSection ? `INVESTOR FEEDBACK SIGNALS (use to calibrate recommendations):\n${feedbackSection}\n` : ""}
-TASK: Generate exactly ${toGenerate} new company suggestions that genuinely fit this thesis. Prefer:
-- Vertical software (industry-specific, not horizontal)
-- Founder-majority owned, modest funding (<$8M raised)
-- B2B enterprise / mid-market buyer
-- Sectors with regulatory lock-in, workflow dependency, or high switching costs
-- Founded 2018–2023, 15–250 employees
+${feedbackSection ? `INVESTOR FEEDBACK:\n${feedbackSection}\n` : ""}
+List exactly ${toGenerate} candidate companies that fit this thesis. Prefer:
+- Vertical/industry-specific software, NOT horizontal tools
+- B2B enterprise or mid-market buyer
+- Founded 2018–2023, 15–250 employees, modest funding
+- Regulatory lock-in, workflow dependency, or high switching costs
 
-RESEARCH INSTRUCTIONS:
-Your training data is outdated — funding rounds and headcounts change constantly. You have a budget of 8 web searches total. Use them wisely across the ${toGenerate} companies:
-- Prioritise searching for the 3–4 most promising candidates you're least certain about.
-- One focused query per company: "<company name> funding 2024 2025" covers latest round, stage, and employee hints simultaneously.
-- Use reported round + stage multiples to estimate ARR: Series A ≈ $3–8M, Series B ≈ $15–40M, Series C ≈ $40–100M+. Cross-check: $200–400K ARR per employee is a healthy B2B SaaS baseline.
-- Skip searching for companies whose facts you're already confident about from training data.
-
-ACCURACY > COMPLETENESS: If a candidate turns out to be too large (>$100M ARR), too small (<$2M ARR), or public/acquired, substitute a better one.
-
-OUTPUT FORMAT:
-After researching, return ONLY a valid JSON array — no explanation, no markdown fences, just the raw JSON. Each element:
+Return ONLY a JSON array. Each element:
 {
   "name": "Company Name",
-  "website": "https://example.com",
-  "description": "2-3 sentences on what they do and what makes it differentiated",
+  "website": "https://...",
   "sector": "B2B SaaS",
-  "subSector": "e.g. Compliance Automation",
+  "subSector": "e.g. Construction Tech",
   "geography": "City, State",
-  "arrEstimate": <estimated ARR in $M as a number>,
-  "arrGrowth": <estimated YoY ARR growth % as a number>,
-  "nrrEstimate": <estimated NRR % as a number>,
-  "grossMargin": <estimated gross margin % as a number>,
-  "employees": <verified headcount as a number>,
-  "founded": <year as a number>,
-  "stage": "Series A",
-  "totalFundingM": <total funding raised in $M as a number>,
-  "recommendationRationale": "2-3 sentences: which specific thesis criteria this meets and why it's a strong fit",
-  "recommendationScore": <fit score 0-100 as a number>,
-  "source": "Evidence summary — cite the latest funding source and employee source you used, e.g. 'Series B $42.5M (Apr 2025, PR Newswire); 200 employees (LinkedIn)'"
+  "founded": <year>,
+  "description": "2-3 sentences — what they do and why differentiated"
 }`;
 
-    // Helper: call Claude and extract the JSON array from the response
-    const callClaude = async (useWebSearch: boolean) => {
-      // Note: web_search is a server-side tool; SDK v0.32 types don't recognise it,
-      // so we cast to bypass type checking.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const body: any = {
-        model: "claude-sonnet-4-6",
-        max_tokens: 5000,
-        messages: [{ role: "user", content: useWebSearch ? prompt : promptNoSearch }],
-      };
-      if (useWebSearch) {
-        // max_uses kept low (8) so cumulative input tokens stay under the 30K/min tier-1 limit
-        body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }];
-      }
-      const msg = await anthropic.messages.create(body);
-      return msg.content
-        .filter((b) => b.type === "text")
-        .map((b) => (b as { type: "text"; text: string }).text)
-        .join("\n")
-        .trim();
-    };
+    const selectionMsg = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 3000,
+      messages: [{ role: "user", content: selectionPrompt }],
+    });
 
-    // Fallback prompt without search instructions (used when web search is unavailable)
-    const promptNoSearch = prompt.replace(
-      /RESEARCH INSTRUCTIONS[\s\S]*?ACCURACY > COMPLETENESS[^\n]*/,
-      `Use your best knowledge to estimate ARR, funding, and headcount.
-Stage multiples: Seed ≈ $0.5–2M, Series A ≈ $3–8M, Series B ≈ $15–40M, Series C ≈ $40–100M+.
-Employee baseline: $200–400K ARR/employee for healthy B2B SaaS.
+    const selectionText = selectionMsg.content
+      .filter(b => b.type === "text")
+      .map(b => (b as { type: "text"; text: string }).text)
+      .join("\n");
 
-ACCURACY > COMPLETENESS: If unsure whether a company fits, pick a different one.`
-    );
+    const selectionMatch = selectionText.match(/\[[\s\S]*\]/);
+    if (!selectionMatch) {
+      return NextResponse.json({ error: "Candidate selection did not return JSON. Try again." }, { status: 500 });
+    }
 
-    let rawText: string;
-    let usedWebSearch = true;
+    const candidates: Array<{ name: string; website?: string; sector?: string; subSector?: string; geography?: string; founded?: number; description?: string }> = JSON.parse(selectionMatch[0]);
+
+    // ── Phase 3: Enrich each candidate with one targeted funding search ───────
+    const enrichmentPrompt = `You are a research analyst. Today is ${today}.
+
+For each company below, search for its current funding and headcount, then return corrected estimates.
+
+COMPANIES TO RESEARCH:
+${candidates.map((c, i) => `${i + 1}. ${c.name} (${c.website ?? "unknown website"})`).join("\n")}
+
+For each company, do ONE search: "<company name> total funding raised employees"
+Then return a JSON array with one object per company:
+{
+  "name": "Company Name",
+  "stage": "Series B",
+  "totalFundingM": <total $M raised — sum ALL rounds>,
+  "employees": <current headcount>,
+  "arrEstimate": <ARR in $M — USE RULES BELOW>,
+  "arrGrowth": <estimated YoY % growth>,
+  "nrrEstimate": <estimated NRR %>,
+  "grossMargin": <estimated gross margin %>,
+  "recommendationScore": <0-100 fit score>,
+  "recommendationRationale": "2-3 sentences on thesis fit",
+  "source": "What you found: e.g. 'Series C $39M (2023 PR Newswire); 152 employees (LinkedIn 2025)'"
+}
+
+ARR ESTIMATION RULES — follow these strictly:
+1. Start with: employees × $250K = ARR baseline
+2. Also compute: totalFundingM ÷ 5 = ARR lower bound (VCs invest at ~5x ARR)
+3. ARR estimate = MAX of (baseline, lower bound, stage floor below)
+4. Stage floors (MINIMUM values — never go below these):
+   - Seed / Pre-Seed: $0.5M ARR
+   - Series A: $3M ARR
+   - Series B: $12M ARR
+   - Series C: $25M ARR
+   - Series D+: $50M ARR
+5. If total funding >$50M → ARR is AT LEAST $15M
+6. If total funding >$80M → ARR is AT LEAST $25M
+7. If 100+ employees → ARR is AT LEAST $10M
+
+Example: 152 employees, $79M total raised, Series C
+  → baseline: 152 × $250K = $38M
+  → lower bound: $79M ÷ 5 = $15.8M
+  → stage floor: $25M
+  → ARR estimate = $38M ✓ (NOT $3.8M)
+
+Return ONLY the JSON array — no markdown, no explanation.`;
+
+    let enriched: Array<Record<string, unknown>> = [];
+    let searchSucceeded = false;
 
     try {
-      rawText = await callClaude(true);
-    } catch (searchErr) {
-      const msg = searchErr instanceof Error ? searchErr.message : String(searchErr);
-      const isBilling = /credit balance/i.test(msg);
-      // "rate limit" (space) or "rate_limit" (underscore) — Anthropic uses both in different contexts
-      const isRateLimit = /rate.?limit|429/i.test(msg);
-      const isRecoverable = isBilling || isRateLimit || /529|overloaded/i.test(msg);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const enrichMsg = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 6000,
+        messages: [{ role: "user", content: enrichmentPrompt }],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: toGenerate + 3 }] as any,
+      } as any);
 
-      if (!isRecoverable) throw searchErr;
+      const enrichText = enrichMsg.content
+        .filter(b => b.type === "text")
+        .map(b => (b as { type: "text"; text: string }).text)
+        .join("\n");
 
-      if (isBilling) {
+      const enrichMatch = enrichText.match(/\[[\s\S]*\]/);
+      if (enrichMatch) {
+        enriched = JSON.parse(enrichMatch[0]);
+        searchSucceeded = true;
+      }
+    } catch (enrichErr) {
+      if (isBillingError(enrichErr)) {
         return NextResponse.json(
           { error: "Anthropic credit balance is too low. Go to console.anthropic.com → Plans & Billing to add credits." },
           { status: 402 }
         );
       }
-
-      if (isRateLimit) {
-        // Fallback without web search uses far fewer tokens — try immediately
-        console.warn("Rate limited on web-search call, falling back to no-search:", msg.slice(0, 120));
-        usedWebSearch = false;
-        try {
-          rawText = await callClaude(false);
-        } catch (fallbackErr) {
-          const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-          return NextResponse.json(
-            { error: "Rate limit hit. Wait 60 seconds and try again, or refresh the page." },
-            { status: 429 }
-          );
-        }
+      if (isRateLimitError(enrichErr)) {
+        console.warn("Rate limited on enrichment — using candidate estimates only");
+        // Fall through: enriched stays empty, we'll use candidates with floor estimates
       } else {
-        console.warn("Web search unavailable, falling back to no-search generation:", msg.slice(0, 120));
-        usedWebSearch = false;
-        rawText = await callClaude(false);
+        console.warn("Enrichment failed, using candidate estimates:", enrichErr instanceof Error ? enrichErr.message : String(enrichErr));
       }
     }
 
-    // Extract JSON array robustly — handle any surrounding text or code fences
-    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-      console.error("Claude response did not contain a JSON array:", rawText.slice(0, 500));
-      return NextResponse.json({ error: "AI response was not valid JSON. Try again." }, { status: 500 });
-    }
-
-    let suggestions: Record<string, unknown>[];
-    try {
-      suggestions = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      console.error("JSON parse error:", e);
-      return NextResponse.json({ error: "AI returned malformed JSON. Try again." }, { status: 500 });
-    }
+    // Build a lookup: company name → enrichment data
+    const enrichMap = new Map(enriched.map(e => [String(e.name ?? "").toLowerCase(), e]));
 
     const now = new Date();
     const created = await Promise.all(
-      suggestions.slice(0, toGenerate).map(s =>
-        db.company.create({
+      candidates.slice(0, toGenerate).map(c => {
+        const e = enrichMap.get(c.name.toLowerCase()) ?? {};
+        const totalFundingM = e.totalFundingM != null ? Number(e.totalFundingM) : null;
+        const employees = e.employees != null ? Number(e.employees) : null;
+
+        // Apply ARR floor rules server-side as a safety net
+        let arrEstimate = e.arrEstimate != null ? Number(e.arrEstimate) : null;
+        const floor = arrFloor(totalFundingM, employees);
+        if (floor != null && (arrEstimate == null || arrEstimate < floor)) {
+          arrEstimate = Math.round(floor * 10) / 10;
+        }
+
+        return db.company.create({
           data: {
-            name: String(s.name ?? "Unknown"),
-            website: s.website ? String(s.website) : null,
-            description: s.description ? String(s.description) : null,
-            sector: s.sector ? String(s.sector) : null,
-            subSector: s.subSector ? String(s.subSector) : null,
-            geography: s.geography ? String(s.geography) : null,
-            arrEstimate: s.arrEstimate != null ? Number(s.arrEstimate) : null,
-            arrGrowth: s.arrGrowth != null ? Number(s.arrGrowth) : null,
-            nrrEstimate: s.nrrEstimate != null ? Number(s.nrrEstimate) : null,
-            grossMargin: s.grossMargin != null ? Number(s.grossMargin) : null,
-            employees: s.employees != null ? Number(s.employees) : null,
-            founded: s.founded != null ? Number(s.founded) : null,
-            stage: s.stage ? String(s.stage) : null,
-            totalFundingM: s.totalFundingM != null ? Number(s.totalFundingM) : null,
+            name: c.name,
+            website: c.website ?? null,
+            description: c.description ?? null,
+            sector: c.sector ?? null,
+            subSector: c.subSector ?? null,
+            geography: c.geography ?? null,
+            founded: c.founded ?? null,
+            stage: e.stage ? String(e.stage) : null,
+            totalFundingM,
+            employees,
+            arrEstimate,
+            arrGrowth: e.arrGrowth != null ? Number(e.arrGrowth) : null,
+            nrrEstimate: e.nrrEstimate != null ? Number(e.nrrEstimate) : null,
+            grossMargin: e.grossMargin != null ? Number(e.grossMargin) : null,
             status: "LEAD",
             priority: "MEDIUM",
-            source: s.source
-              ? String(s.source)
-              : usedWebSearch ? "AI recommendation (web-verified)" : "AI recommendation",
-            recommendationRationale: s.recommendationRationale ? String(s.recommendationRationale) : null,
-            recommendationScore: s.recommendationScore != null ? Number(s.recommendationScore) : null,
+            source: e.source
+              ? String(e.source)
+              : searchSucceeded ? "AI recommendation (web-verified)" : "AI recommendation",
+            recommendationRationale: e.recommendationRationale ? String(e.recommendationRationale) : null,
+            recommendationScore: e.recommendationScore != null ? Number(e.recommendationScore) : null,
             recommendedAt: now,
           },
-        })
-      )
+        });
+      })
     );
 
-    return NextResponse.json({
-      generated: created.length,
-      webSearchUsed: usedWebSearch,
-    });
+    return NextResponse.json({ generated: created.length, webSearchUsed: searchSucceeded });
 
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
