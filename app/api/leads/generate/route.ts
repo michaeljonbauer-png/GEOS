@@ -96,17 +96,14 @@ TASK: Generate exactly ${toGenerate} new company suggestions that genuinely fit 
 - Sectors with regulatory lock-in, workflow dependency, or high switching costs
 - Founded 2018–2023, 15–250 employees
 
-RESEARCH INSTRUCTIONS — this is critical:
-Your training data is outdated. Funding rounds, employee counts, and ARR estimates change constantly. For EACH candidate company you consider, you MUST use the web_search tool to verify current facts before finalizing. Specifically:
-1. Search "<company name> funding" or "<company name> Series B 2024 2025" to find the latest round (amount, date, lead investor, stage).
-2. Search "<company name> employees LinkedIn" or "<company name> headcount" to triangulate current team size (LinkedIn, PitchBook public summaries, Growjo, RocketReach — use 2024/2025 figures only).
-3. Search "<company name> ARR" or "<company name> revenue" to look for any disclosed or reported revenue figures (press releases, interviews, growth databases).
-4. If the company has raised a meaningful recent round, use reported round size + stage-typical revenue multiples to estimate ARR (Series A ≈ $3–8M ARR, Series B ≈ $15–40M ARR, Series C ≈ $40–100M+ ARR). Cross-check against employee count (rough rule: $200–400K ARR per employee for healthy B2B SaaS).
-5. If no recent round, triangulate from employees × $250K/employee and adjust for stage/sector.
+RESEARCH INSTRUCTIONS:
+Your training data is outdated — funding rounds and headcounts change constantly. You have a budget of 8 web searches total. Use them wisely across the ${toGenerate} companies:
+- Prioritise searching for the 3–4 most promising candidates you're least certain about.
+- One focused query per company: "<company name> funding 2024 2025" covers latest round, stage, and employee hints simultaneously.
+- Use reported round + stage multiples to estimate ARR: Series A ≈ $3–8M, Series B ≈ $15–40M, Series C ≈ $40–100M+. Cross-check: $200–400K ARR per employee is a healthy B2B SaaS baseline.
+- Skip searching for companies whose facts you're already confident about from training data.
 
-Search efficiently — aim for ~2–3 searches per candidate, not more. Prefer specific queries with the company name and a year.
-
-ACCURACY > COMPLETENESS: Better to return ${toGenerate} well-researched companies than ${toGenerate + 5} guesses. If a candidate turns out to be too large (>$100M ARR), too small (<$2M ARR), or already public/acquired, swap it out.
+ACCURACY > COMPLETENESS: If a candidate turns out to be too large (>$100M ARR), too small (<$2M ARR), or public/acquired, substitute a better one.
 
 OUTPUT FORMAT:
 After researching, return ONLY a valid JSON array — no explanation, no markdown fences, just the raw JSON. Each element:
@@ -130,16 +127,17 @@ After researching, return ONLY a valid JSON array — no explanation, no markdow
   "source": "Evidence summary — cite the latest funding source and employee source you used, e.g. 'Series B $42.5M (Apr 2025, PR Newswire); 200 employees (LinkedIn)'"
 }`;
 
-    // Use web search to verify real-time facts — critical for funding rounds & headcount
-    // Cost: ~$10 / 1000 searches. Budget ~30 searches per 10-lead generation (~$0.30).
+    // Use web search to verify real-time facts — critical for funding rounds & headcount.
+    // max_uses is kept low (8) to stay within the 30K input-tokens-per-minute tier-1 limit:
+    // each search result adds ~2K tokens to context, so 8 searches ≈ 16K cumulative tokens.
     // Note: web_search is a server-side tool; SDK v0.32 types don't recognize it yet,
     // so we cast the tools array to bypass the client-tool typing.
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 16000,
+      max_tokens: 5000,
       messages: [{ role: "user", content: prompt }],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 40 }] as any,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }] as any,
     });
 
     // With tool use, the final text block(s) contain the JSON. Concatenate all text blocks.

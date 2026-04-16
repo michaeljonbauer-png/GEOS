@@ -46,14 +46,12 @@ CURRENT RECORD (may be stale — your job is to verify and update):
 - Founded: ${company.founded ?? "unknown"}
 - Geography: ${company.geography ?? "unknown"}
 
-RESEARCH INSTRUCTIONS — use the web_search tool (aim for 3–6 targeted searches):
-1. Search "${company.name} funding 2024" and "${company.name} Series B Series C" — find the LATEST funding round (amount, date, stage, lead investor). Prefer press releases, Crunchbase News, PR Newswire, TechCrunch, Axios Pro Rata.
-2. Search "${company.name} employees LinkedIn" or "${company.name} headcount" — triangulate current team size from LinkedIn, PitchBook public summary, Growjo, or RocketReach. Use 2024/2025 data only.
-3. Search "${company.name} revenue" or "${company.name} ARR" — look for disclosed revenue figures in articles, interviews, or growth databases.
-4. If ARR is not disclosed, estimate it using:
-   - Stage-typical multiples: Seed ≈ $0.5–2M ARR, Series A ≈ $3–8M, Series B ≈ $15–40M, Series C ≈ $40–100M+
-   - Employee triangulation: healthy B2B SaaS runs $200–400K ARR/employee
-   - Cross-check: if latest round was Series B at $42M, the company almost certainly has $15M+ ARR, not $2.5M
+RESEARCH INSTRUCTIONS — use up to 5 web searches, focused on what you're least certain about:
+1. "${company.name} funding 2024 2025" — latest round, amount, stage, date.
+2. "${company.name} employees headcount" — current team size (LinkedIn, Growjo, PitchBook public).
+3. Only search for revenue/ARR if a public figure seems likely; otherwise triangulate:
+   - Stage multiples: Seed ≈ $0.5–2M, Series A ≈ $3–8M, Series B ≈ $15–40M, Series C ≈ $40–100M+
+   - Employee baseline: $200–400K ARR/employee for healthy B2B SaaS
 
 OUTPUT FORMAT — return ONLY a JSON object (no prose, no markdown fences):
 {
@@ -82,10 +80,10 @@ Only include fields where you found verifiable evidence or can triangulate with 
     // so we cast the tools array to bypass the client-tool typing.
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 8000,
+      max_tokens: 3000,
       messages: [{ role: "user", content: prompt }],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 10 }] as any,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }] as any,
     });
 
     const rawText = message.content
