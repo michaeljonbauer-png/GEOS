@@ -45,7 +45,7 @@ export async function POST() {
     // --- Build context for Claude ---
     const [thesisCriteria, existingCompanies, recentFeedback] = await Promise.all([
       db.thesisCriterion.findMany({ where: { isActive: true }, orderBy: { order: "asc" } }),
-      db.company.findMany({ select: { name: true }, orderBy: { createdAt: "desc" } }),
+      db.company.findMany({ select: { name: true }, orderBy: { createdAt: "desc" }, take: 30 }),
       db.companyFeedback.findMany({
         include: { company: { select: { name: true, sector: true, subSector: true, arrEstimate: true } } },
         orderBy: { createdAt: "desc" },
@@ -165,23 +165,39 @@ ACCURACY > COMPLETENESS: If unsure whether a company fits, pick a different one.
     try {
       rawText = await callClaude(true);
     } catch (searchErr) {
-      // If web search fails (billing, rate limit, etc.) degrade gracefully to no-search
       const msg = searchErr instanceof Error ? searchErr.message : String(searchErr);
       const isBilling = /credit balance/i.test(msg);
-      const isRecoverable = isBilling || /rate_limit|529|overloaded/i.test(msg);
-      if (!isRecoverable) throw searchErr; // surface unexpected errors
+      // "rate limit" (space) or "rate_limit" (underscore) — Anthropic uses both in different contexts
+      const isRateLimit = /rate.?limit|429/i.test(msg);
+      const isRecoverable = isBilling || isRateLimit || /529|overloaded/i.test(msg);
+
+      if (!isRecoverable) throw searchErr;
 
       if (isBilling) {
-        // Credits exhausted — no point retrying without search either
         return NextResponse.json(
           { error: "Anthropic credit balance is too low. Go to console.anthropic.com → Plans & Billing to add credits." },
           { status: 402 }
         );
       }
 
-      console.warn("Web search unavailable, falling back to no-search generation:", msg);
-      usedWebSearch = false;
-      rawText = await callClaude(false);
+      if (isRateLimit) {
+        // Fallback without web search uses far fewer tokens — try immediately
+        console.warn("Rate limited on web-search call, falling back to no-search:", msg.slice(0, 120));
+        usedWebSearch = false;
+        try {
+          rawText = await callClaude(false);
+        } catch (fallbackErr) {
+          const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+          return NextResponse.json(
+            { error: "Rate limit hit. Wait 60 seconds and try again, or refresh the page." },
+            { status: 429 }
+          );
+        }
+      } else {
+        console.warn("Web search unavailable, falling back to no-search generation:", msg.slice(0, 120));
+        usedWebSearch = false;
+        rawText = await callClaude(false);
+      }
     }
 
     // Extract JSON array robustly — handle any surrounding text or code fences
