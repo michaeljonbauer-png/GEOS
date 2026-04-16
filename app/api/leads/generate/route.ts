@@ -127,25 +127,52 @@ After researching, return ONLY a valid JSON array — no explanation, no markdow
   "source": "Evidence summary — cite the latest funding source and employee source you used, e.g. 'Series B $42.5M (Apr 2025, PR Newswire); 200 employees (LinkedIn)'"
 }`;
 
-    // Use web search to verify real-time facts — critical for funding rounds & headcount.
-    // max_uses is kept low (8) to stay within the 30K input-tokens-per-minute tier-1 limit:
-    // each search result adds ~2K tokens to context, so 8 searches ≈ 16K cumulative tokens.
-    // Note: web_search is a server-side tool; SDK v0.32 types don't recognize it yet,
-    // so we cast the tools array to bypass the client-tool typing.
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 5000,
-      messages: [{ role: "user", content: prompt }],
+    // Helper: call Claude and extract the JSON array from the response
+    const callClaude = async (useWebSearch: boolean) => {
+      // Note: web_search is a server-side tool; SDK v0.32 types don't recognise it,
+      // so we cast to bypass type checking.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }] as any,
-    });
+      const body: any = {
+        model: "claude-sonnet-4-6",
+        max_tokens: 5000,
+        messages: [{ role: "user", content: useWebSearch ? prompt : promptNoSearch }],
+      };
+      if (useWebSearch) {
+        // max_uses kept low (8) so cumulative input tokens stay under the 30K/min tier-1 limit
+        body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }];
+      }
+      const msg = await anthropic.messages.create(body);
+      return msg.content
+        .filter((b) => b.type === "text")
+        .map((b) => (b as { type: "text"; text: string }).text)
+        .join("\n")
+        .trim();
+    };
 
-    // With tool use, the final text block(s) contain the JSON. Concatenate all text blocks.
-    const rawText = message.content
-      .filter((b) => b.type === "text")
-      .map((b) => (b as { type: "text"; text: string }).text)
-      .join("\n")
-      .trim();
+    // Fallback prompt without search instructions (used when web search is unavailable)
+    const promptNoSearch = prompt.replace(
+      /RESEARCH INSTRUCTIONS[\s\S]*?ACCURACY > COMPLETENESS[^\n]*/,
+      `Use your best knowledge to estimate ARR, funding, and headcount.
+Stage multiples: Seed ≈ $0.5–2M, Series A ≈ $3–8M, Series B ≈ $15–40M, Series C ≈ $40–100M+.
+Employee baseline: $200–400K ARR/employee for healthy B2B SaaS.
+
+ACCURACY > COMPLETENESS: If unsure whether a company fits, pick a different one.`
+    );
+
+    let rawText: string;
+    let usedWebSearch = true;
+
+    try {
+      rawText = await callClaude(true);
+    } catch (searchErr) {
+      // If web search fails (billing, rate limit, etc.) degrade gracefully to no-search
+      const msg = searchErr instanceof Error ? searchErr.message : String(searchErr);
+      const isRecoverable = /credit balance|rate_limit|529|overloaded/i.test(msg);
+      if (!isRecoverable) throw searchErr; // surface unexpected errors
+      console.warn("Web search unavailable, falling back to no-search generation:", msg);
+      usedWebSearch = false;
+      rawText = await callClaude(false);
+    }
 
     // Extract JSON array robustly — handle any surrounding text or code fences
     const jsonMatch = rawText.match(/\[[\s\S]*\]/);
@@ -183,7 +210,9 @@ After researching, return ONLY a valid JSON array — no explanation, no markdow
             totalFundingM: s.totalFundingM != null ? Number(s.totalFundingM) : null,
             status: "LEAD",
             priority: "MEDIUM",
-            source: s.source ? String(s.source) : "AI recommendation",
+            source: s.source
+              ? String(s.source)
+              : usedWebSearch ? "AI recommendation (web-verified)" : "AI recommendation",
             recommendationRationale: s.recommendationRationale ? String(s.recommendationRationale) : null,
             recommendationScore: s.recommendationScore != null ? Number(s.recommendationScore) : null,
             recommendedAt: now,
@@ -192,7 +221,10 @@ After researching, return ONLY a valid JSON array — no explanation, no markdow
       )
     );
 
-    return NextResponse.json({ generated: created.length });
+    return NextResponse.json({
+      generated: created.length,
+      webSearchUsed: usedWebSearch,
+    });
 
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
