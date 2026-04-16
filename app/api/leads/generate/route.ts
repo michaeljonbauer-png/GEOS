@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export const dynamic = "force-dynamic";
 
-const QUEUE_TARGET = 10;
+const QUEUE_TARGET = 9;
 
 // Long-running: web search + multiple Claude turns can take 60–120s
 export const maxDuration = 300;
@@ -33,7 +33,7 @@ export async function POST() {
         select: { id: true },
       });
       await db.company.deleteMany({ where: { id: { in: excess.map(l => l.id) } } });
-      return NextResponse.json({ generated: 0, message: "Trimmed queue to 10" });
+      return NextResponse.json({ generated: 0, message: "Trimmed queue to 9" });
     }
 
     const toGenerate = Math.max(0, QUEUE_TARGET - currentCount);

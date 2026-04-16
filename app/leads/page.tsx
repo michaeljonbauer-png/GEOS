@@ -30,7 +30,7 @@ interface Lead {
   recommendationScore: number | null;
 }
 
-const QUEUE_TARGET = 10;
+const QUEUE_TARGET = 9;
 
 function ScoreBadge({ score }: { score: number | null }) {
   if (score == null) return null;
