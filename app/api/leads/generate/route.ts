@@ -112,6 +112,12 @@ List exactly ${toGenerate} candidate companies that fit this thesis. Prefer:
 - Founded 2018–2023, 15–250 employees, modest funding
 - Regulatory lock-in, workflow dependency, or high switching costs
 
+HARD EXCLUSIONS — do NOT suggest any company that is:
+- Acquired, merged, or a subsidiary of another company
+- Backed by private equity (PE-owned or PE-controlled)
+- Publicly traded (NYSE, NASDAQ, etc.)
+- Part of a portfolio company roll-up
+
 Return ONLY a JSON array. Each element:
 {
   "name": "Company Name",
@@ -149,10 +155,14 @@ For each company below, search for its current funding and headcount, then retur
 COMPANIES TO RESEARCH:
 ${candidates.map((c, i) => `${i + 1}. ${c.name} (${c.website ?? "unknown website"})`).join("\n")}
 
-For each company, do ONE search: "<company name> total funding raised employees"
+For each company, do ONE search: "<company name> acquired funding employees"
+This single query will surface acquisition news, total funding raised, and headcount simultaneously.
+
 Then return a JSON array with one object per company:
 {
   "name": "Company Name",
+  "acquired": <true if acquired, PE-owned, gone public, or part of a roll-up — false otherwise>,
+  "acquiredBy": "Acquirer name if acquired, else null",
   "stage": "Series B",
   "totalFundingM": <total $M raised — sum ALL rounds>,
   "employees": <current headcount>,
@@ -164,6 +174,12 @@ Then return a JSON array with one object per company:
   "recommendationRationale": "2-3 sentences on thesis fit",
   "source": "What you found: e.g. 'Series C $39M (2023 PR Newswire); 152 employees (LinkedIn 2025)'"
 }
+
+ACQUISITION CHECK — this is critical. If the search shows ANY of these, set acquired: true:
+- "acquired by", "acquisition", "merger", "joins [company]"
+- PE firm ownership (Vista Equity, Thoma Bravo, Francisco Partners, etc.)
+- IPO or SPAC listing
+- "subsidiary of", "now part of", "portfolio company of"
 
 ARR ESTIMATION RULES — follow these strictly:
 1. Start with: employees × $250K = ARR baseline
@@ -228,9 +244,25 @@ Return ONLY the JSON array — no markdown, no explanation.`;
     // Build a lookup: company name → enrichment data
     const enrichMap = new Map(enriched.map(e => [String(e.name ?? "").toLowerCase(), e]));
 
+    // Filter out companies the enrichment flagged as acquired/PE-owned/public
+    const acquiredNames: string[] = [];
+    const viableCandidates = candidates.slice(0, toGenerate).filter(c => {
+      const e = enrichMap.get(c.name.toLowerCase());
+      if (e?.acquired === true) {
+        acquiredNames.push(`${c.name}${e.acquiredBy ? ` (acquired by ${e.acquiredBy})` : ""}`);
+        console.log(`Filtered out acquired company: ${c.name}`);
+        return false;
+      }
+      return true;
+    });
+
+    if (acquiredNames.length > 0) {
+      console.log(`Dropped ${acquiredNames.length} acquired companies: ${acquiredNames.join(", ")}`);
+    }
+
     const now = new Date();
     const created = await Promise.all(
-      candidates.slice(0, toGenerate).map(c => {
+      viableCandidates.map(c => {
         const e = enrichMap.get(c.name.toLowerCase()) ?? {};
         const totalFundingM = e.totalFundingM != null ? Number(e.totalFundingM) : null;
         const employees = e.employees != null ? Number(e.employees) : null;
@@ -271,7 +303,11 @@ Return ONLY the JSON array — no markdown, no explanation.`;
       })
     );
 
-    return NextResponse.json({ generated: created.length, webSearchUsed: searchSucceeded });
+    return NextResponse.json({
+      generated: created.length,
+      webSearchUsed: searchSucceeded,
+      filtered: acquiredNames,
+    });
 
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
