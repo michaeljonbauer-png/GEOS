@@ -5,31 +5,27 @@ import Anthropic from "@anthropic-ai/sdk";
 export const dynamic = "force-dynamic";
 
 const QUEUE_TARGET = 9;
-
-// Two-phase generation: candidate selection (~5s) + per-company funding research (~60-90s)
 export const maxDuration = 300;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function isRateLimitError(err: unknown) {
-  const msg = err instanceof Error ? err.message : String(err);
   const status = (err as { status?: number }).status;
+  const msg = err instanceof Error ? err.message : String(err);
   return status === 429 || /rate.?limit/i.test(msg);
 }
 
 function isBillingError(err: unknown) {
-  const msg = err instanceof Error ? err.message : String(err);
   const status = (err as { status?: number }).status;
+  const msg = err instanceof Error ? err.message : String(err);
   return status === 402 || /credit balance/i.test(msg);
 }
 
-// Use total funding + employee count to compute a floor ARR estimate in $M.
-// This prevents the common failure of under-estimating well-funded companies.
 function arrFloor(totalFundingM: number | null, employees: number | null): number | null {
-  const fromFunding = totalFundingM != null ? totalFundingM / 5 : null;  // ~5x ARR multiple
-  const fromEmployees = employees != null ? (employees * 0.25) : null;   // $250K ARR/employee
-  const candidates = [fromFunding, fromEmployees].filter((v): v is number => v != null);
-  return candidates.length > 0 ? Math.max(...candidates) : null;
+  const a = totalFundingM != null ? totalFundingM / 5 : null;
+  const b = employees != null ? employees * 0.25 : null;
+  const vals = [a, b].filter((v): v is number => v != null);
+  return vals.length ? Math.max(...vals) : null;
 }
 
 // ─── Route ──────────────────────────────────────────────────────────────────
@@ -63,7 +59,7 @@ export async function POST() {
       return NextResponse.json({ generated: 0, message: "Queue is already full" });
     }
 
-    // ── Phase 1: Build context ───────────────────────────────────────────────
+    // ── Context ──────────────────────────────────────────────────────────────
     const [thesisCriteria, existingCompanies, recentFeedback] = await Promise.all([
       db.thesisCriterion.findMany({ where: { isActive: true }, orderBy: { order: "asc" } }),
       db.company.findMany({ select: { name: true }, orderBy: { createdAt: "desc" }, take: 30 }),
@@ -86,195 +82,214 @@ export async function POST() {
     }).join("\n");
 
     const existingNames = existingCompanies.map(c => c.name).join(", ") || "None yet";
-
     const interested = recentFeedback.filter(f => ["INTERESTED", "HIGH_PRIORITY"].includes(f.signal));
     const passed = recentFeedback.filter(f => f.signal === "PASS");
     const feedbackSection = [
-      interested.length > 0 ? `Investor LIKED: ${interested.map(f => f.company.name).join(", ")}` : "",
-      passed.length > 0 ? `Investor PASSED: ${passed.map(f => `${f.company.name}${f.notes ? " — " + f.notes : ""}`).join("; ")}` : "",
-    ].filter(Boolean).join("\n");
+      interested.length > 0 ? `Liked: ${interested.map(f => f.company.name).join(", ")}` : "",
+      passed.length > 0 ? `Passed: ${passed.map(f => f.company.name).join(", ")}` : "",
+    ].filter(Boolean).join(" | ");
 
     const today = new Date().toISOString().slice(0, 10);
 
-    // ── Phase 2: Select candidates (no search, fast & cheap) ─────────────────
-    const selectionPrompt = `You are helping a growth equity investor identify B2B SaaS investment leads. Today is ${today}.
+    // ══ PHASE 1: Select candidate names (no search, ~1K tokens) ═════════════
+    type Candidate = { name: string; website?: string; sector?: string; subSector?: string; geography?: string; founded?: number; description?: string };
+    let candidates: Candidate[] = [];
 
-INVESTOR THESIS:
+    try {
+      const selMsg = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2500,
+        messages: [{
+          role: "user",
+          content: `Growth equity investor seeking B2B SaaS leads. Today: ${today}.
+
+THESIS:
 ${thesisSummary}
 
-ALREADY IN PIPELINE — skip these and close variants:
-${existingNames}
+SKIP (already in pipeline): ${existingNames}
+${feedbackSection ? `FEEDBACK: ${feedbackSection}` : ""}
 
-${feedbackSection ? `INVESTOR FEEDBACK:\n${feedbackSection}\n` : ""}
-List exactly ${toGenerate} candidate companies that fit this thesis. Prefer:
-- Vertical/industry-specific software, NOT horizontal tools
-- B2B enterprise or mid-market buyer
-- Founded 2018–2023, 15–250 employees, modest funding
-- Regulatory lock-in, workflow dependency, or high switching costs
+List exactly ${toGenerate} candidate companies. Prefer: vertical/industry software, B2B enterprise/mid-market, founded 2018–2023, 15–250 employees. EXCLUDE: acquired, PE-owned, public, roll-up subsidiaries.
 
-HARD EXCLUSIONS — do NOT suggest any company that is:
-- Acquired, merged, or a subsidiary of another company
-- Backed by private equity (PE-owned or PE-controlled)
-- Publicly traded (NYSE, NASDAQ, etc.)
-- Part of a portfolio company roll-up
+JSON array only:
+{"name":"","website":"","sector":"","subSector":"","geography":"","founded":0,"description":""}`,
+        }],
+      });
 
-Return ONLY a JSON array. Each element:
-{
-  "name": "Company Name",
-  "website": "https://...",
-  "sector": "B2B SaaS",
-  "subSector": "e.g. Construction Tech",
-  "geography": "City, State",
-  "founded": <year>,
-  "description": "2-3 sentences — what they do and why differentiated"
-}`;
-
-    const selectionMsg = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 3000,
-      messages: [{ role: "user", content: selectionPrompt }],
-    });
-
-    const selectionText = selectionMsg.content
-      .filter(b => b.type === "text")
-      .map(b => (b as { type: "text"; text: string }).text)
-      .join("\n");
-
-    const selectionMatch = selectionText.match(/\[[\s\S]*\]/);
-    if (!selectionMatch) {
-      return NextResponse.json({ error: "Candidate selection did not return JSON. Try again." }, { status: 500 });
+      const text = selMsg.content.filter(b => b.type === "text").map(b => (b as { type: "text"; text: string }).text).join("\n");
+      const match = text.match(/\[[\s\S]*\]/);
+      if (match) candidates = JSON.parse(match[0]);
+    } catch (selErr) {
+      if (isBillingError(selErr)) {
+        return NextResponse.json({ error: "Anthropic credit balance too low. Add credits at console.anthropic.com." }, { status: 402 });
+      }
+      if (isRateLimitError(selErr)) {
+        return NextResponse.json({ error: "Rate limit hit. Wait ~60 seconds and try again." }, { status: 429 });
+      }
+      throw selErr;
     }
 
-    const candidates: Array<{ name: string; website?: string; sector?: string; subSector?: string; geography?: string; founded?: number; description?: string }> = JSON.parse(selectionMatch[0]);
-
-    // ── Phase 3: Enrich each candidate with one targeted funding search ───────
-    const enrichmentPrompt = `You are a research analyst scoring B2B SaaS companies for a growth equity investor. Today is ${today}.
-
-INVESTOR THESIS CRITERIA (score each company against ALL of these):
-${thesisSummary}
-
-COMPANIES TO RESEARCH:
-${candidates.map((c, i) => `${i + 1}. ${c.name} (${c.website ?? "unknown website"})`).join("\n")}
-
-For each company, do ONE search: "<company name> acquired funding employees"
-This surfaces acquisition news, total funding raised, and headcount simultaneously.
-
-Return a JSON array with one object per company:
-{
-  "name": "Company Name",
-  "acquired": <true if acquired, PE-owned, gone public, or part of a roll-up — false otherwise>,
-  "acquiredBy": "Acquirer name if acquired, else null",
-  "stage": "Series B",
-  "totalFundingM": <total $M raised — sum ALL rounds>,
-  "employees": <current headcount>,
-  "arrEstimate": <ARR in $M — USE ARR RULES BELOW>,
-  "arrGrowth": <estimated YoY % growth>,
-  "nrrEstimate": <estimated NRR %>,
-  "grossMargin": <estimated gross margin %>,
-  "recommendationRationale": "2-3 sentences: how it fits the thesis overall",
-  "scoreBreakdown": [
-    {
-      "criterion": "Exact criterion name from thesis above",
-      "met": true,
-      "score": <0-100 how well this criterion is met>,
-      "note": "1 sentence: specific evidence or reason for this score"
+    if (!candidates.length) {
+      return NextResponse.json({ error: "Candidate selection returned no companies. Try again." }, { status: 500 });
     }
-  ],
-  "recommendationScore": <weighted average of scoreBreakdown scores, 0-100>,
-  "source": "e.g. 'Series C $39M (2023 PR Newswire); 152 employees (LinkedIn 2025)'"
-}
 
-SCORING RULES:
-- Score each criterion in the thesis independently (0 = completely fails, 100 = perfect match)
-- met: true if the company clearly satisfies the criterion; false if it falls short or is uncertain
-- recommendationScore = weighted average of all criterion scores (hard filter failures should drag the overall score below 50)
-- Be honest: a company with 2 of 5 criteria met should score ~40, not 70
-
-ACQUISITION CHECK — if the search shows ANY of these, set acquired: true:
-- "acquired by", "acquisition", "merger", "joins [company]"
-- PE firm ownership (Vista Equity, Thoma Bravo, Francisco Partners, KKR, Bain Capital, etc.)
-- IPO or SPAC listing
-- "subsidiary of", "now part of", "portfolio company of"
-
-ARR ESTIMATION RULES — follow these strictly:
-1. Start with: employees × $250K = ARR baseline
-2. Also compute: totalFundingM ÷ 5 = ARR lower bound
-3. ARR estimate = MAX of (baseline, lower bound, stage floor)
-4. Stage floors: Seed $0.5M, Series A $3M, Series B $12M, Series C $25M, Series D+ $50M
-5. >$50M raised → ARR ≥ $15M; >$80M raised → ARR ≥ $25M; 100+ employees → ARR ≥ $10M
-
-Return ONLY the JSON array — no markdown, no explanation.`;
-
-    let enriched: Array<Record<string, unknown>> = [];
+    // ══ PHASE 2: Fact-finding via web search (NO thesis = small context per turn) ═
+    // Keeping thesis out of this prompt is the key rate-limit fix:
+    // prompt is ~400 tokens vs ~1400 tokens before, saving ~1000 tokens × N search turns.
+    type FactData = {
+      name: string; acquired?: boolean; acquiredBy?: string | null;
+      stage?: string; totalFundingM?: number | null; employees?: number | null;
+      arrEstimate?: number | null; arrGrowth?: number | null;
+      source?: string;
+    };
+    let facts: FactData[] = [];
     let searchSucceeded = false;
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const enrichMsg = await anthropic.messages.create({
+      const factMsg = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 6000,
-        messages: [{ role: "user", content: enrichmentPrompt }],
+        max_tokens: 4000,
+        messages: [{
+          role: "user",
+          content: `Research analyst. Today: ${today}.
+
+For each company, do ONE search: "<name> acquired funding employees"
+This single query surfaces acquisition news, latest funding, and headcount.
+
+Companies:
+${candidates.map((c, i) => `${i + 1}. ${c.name} (${c.website ?? "unknown"})`).join("\n")}
+
+Return JSON array:
+{
+  "name": "Company Name",
+  "acquired": <true if acquired/PE-owned/public/roll-up, false otherwise>,
+  "acquiredBy": "name or null",
+  "stage": "Series B",
+  "totalFundingM": <total $M all rounds>,
+  "employees": <current headcount>,
+  "arrEstimate": <$M — MAX of: employees×0.25, totalFundingM÷5, stage floor (A=$3M B=$12M C=$25M)>,
+  "arrGrowth": <YoY % estimate>,
+  "source": "e.g. Series C $39M Apr 2025; 152 employees LinkedIn"
+}
+
+ACQUISITION: set acquired=true for: "acquired by", PE firm ownership, IPO, "subsidiary of", roll-up.
+ARR floors: Seed $0.5M, A $3M, B $12M, C $25M, D+ $50M. >$80M raised → ≥$25M ARR.
+JSON array only.`,
+        }],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: toGenerate + 3 }] as any,
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: Math.min(toGenerate, 6) }] as any,
       } as any);
 
-      const enrichText = enrichMsg.content
-        .filter(b => b.type === "text")
-        .map(b => (b as { type: "text"; text: string }).text)
-        .join("\n");
-
-      const enrichMatch = enrichText.match(/\[[\s\S]*\]/);
-      if (enrichMatch) {
-        enriched = JSON.parse(enrichMatch[0]);
+      const factText = factMsg.content.filter(b => b.type === "text").map(b => (b as { type: "text"; text: string }).text).join("\n");
+      const factMatch = factText.match(/\[[\s\S]*\]/);
+      if (factMatch) {
+        facts = JSON.parse(factMatch[0]);
         searchSucceeded = true;
       }
-    } catch (enrichErr) {
-      if (isBillingError(enrichErr)) {
-        return NextResponse.json(
-          { error: "Anthropic credit balance is too low. Go to console.anthropic.com → Plans & Billing to add credits." },
-          { status: 402 }
-        );
+    } catch (factErr) {
+      if (isBillingError(factErr)) {
+        return NextResponse.json({ error: "Anthropic credit balance too low. Add credits at console.anthropic.com." }, { status: 402 });
       }
-      if (isRateLimitError(enrichErr)) {
-        console.warn("Rate limited on enrichment — using candidate estimates only");
-        // Fall through: enriched stays empty, we'll use candidates with floor estimates
+      if (isRateLimitError(factErr)) {
+        console.warn("Rate limited on fact-finding — will save candidates with formula-based estimates");
+        // Fall through: facts stays empty, Phase 3 scoring still runs with candidate descriptions
       } else {
-        console.warn("Enrichment failed, using candidate estimates:", enrichErr instanceof Error ? enrichErr.message : String(enrichErr));
+        console.warn("Fact-finding failed:", factErr instanceof Error ? factErr.message : String(factErr));
       }
     }
 
-    // Build a lookup: company name → enrichment data
-    const enrichMap = new Map(enriched.map(e => [String(e.name ?? "").toLowerCase(), e]));
+    const factMap = new Map(facts.map(f => [f.name.toLowerCase(), f]));
 
-    // Filter out companies the enrichment flagged as acquired/PE-owned/public
+    // Drop acquired/PE/public companies
     const acquiredNames: string[] = [];
-    const viableCandidates = candidates.slice(0, toGenerate).filter(c => {
-      const e = enrichMap.get(c.name.toLowerCase());
-      if (e?.acquired === true) {
-        acquiredNames.push(`${c.name}${e.acquiredBy ? ` (acquired by ${e.acquiredBy})` : ""}`);
-        console.log(`Filtered out acquired company: ${c.name}`);
+    const viable = candidates.slice(0, toGenerate).filter(c => {
+      const f = factMap.get(c.name.toLowerCase());
+      if (f?.acquired === true) {
+        acquiredNames.push(`${c.name}${f.acquiredBy ? ` (→ ${f.acquiredBy})` : ""}`);
         return false;
       }
       return true;
     });
+    if (acquiredNames.length) console.log(`Filtered acquired: ${acquiredNames.join(", ")}`);
 
-    if (acquiredNames.length > 0) {
-      console.log(`Dropped ${acquiredNames.length} acquired companies: ${acquiredNames.join(", ")}`);
+    // ══ PHASE 3: Score against thesis (no search, bounded cost) ══════════════
+    type ScoreData = {
+      name: string;
+      recommendationScore?: number;
+      recommendationRationale?: string;
+      scoreBreakdown?: Array<{ criterion: string; met: boolean; score: number; note: string }>;
+    };
+    let scores: ScoreData[] = [];
+
+    // Build a compact company summary for the scoring prompt
+    const companySummaries = viable.map(c => {
+      const f = factMap.get(c.name.toLowerCase());
+      const arr = f?.arrEstimate ?? null;
+      const floor = arrFloor(f?.totalFundingM ?? null, f?.employees ?? null);
+      const arrFinal = arr != null && floor != null ? Math.max(arr, floor) : arr ?? floor;
+      return `${c.name}: ${c.description ?? ""} | Stage: ${f?.stage ?? "unknown"} | Funding: $${f?.totalFundingM ?? "?"}M | Employees: ${f?.employees ?? "?"} | ARR est: $${arrFinal?.toFixed(1) ?? "?"}M`;
+    }).join("\n");
+
+    if (viable.length > 0) {
+      try {
+        const scoreMsg = await anthropic.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: 4000,
+          messages: [{
+            role: "user",
+            content: `Score these B2B SaaS companies against a growth equity thesis. No web search needed — use the data provided.
+
+THESIS CRITERIA:
+${thesisSummary}
+
+COMPANIES (with verified facts):
+${companySummaries}
+
+For each company return a JSON array:
+{
+  "name": "Company Name",
+  "recommendationScore": <0-100 weighted average>,
+  "recommendationRationale": "2-3 sentences overall fit",
+  "scoreBreakdown": [
+    { "criterion": "exact criterion name", "met": true, "score": 0-100, "note": "1 sentence evidence" }
+  ]
+}
+
+SCORING: score each criterion 0-100. met=true if clearly satisfied. recommendationScore = weighted avg (hard filter failures drag score below 50). Be honest — 2 of 5 criteria ≈ score 40.
+JSON array only.`,
+          }],
+        });
+
+        const scoreText = scoreMsg.content.filter(b => b.type === "text").map(b => (b as { type: "text"; text: string }).text).join("\n");
+        const scoreMatch = scoreText.match(/\[[\s\S]*\]/);
+        if (scoreMatch) scores = JSON.parse(scoreMatch[0]);
+      } catch (scoreErr) {
+        if (isRateLimitError(scoreErr)) {
+          console.warn("Rate limited on scoring — companies saved without breakdown");
+        } else {
+          console.warn("Scoring failed:", scoreErr instanceof Error ? scoreErr.message : String(scoreErr));
+        }
+      }
     }
 
+    const scoreMap = new Map(scores.map(s => [s.name.toLowerCase(), s]));
+
+    // ══ Save to DB ═══════════════════════════════════════════════════════════
     const now = new Date();
     const created = await Promise.all(
-      viableCandidates.map(c => {
-        const e = enrichMap.get(c.name.toLowerCase()) ?? {};
-        const totalFundingM = e.totalFundingM != null ? Number(e.totalFundingM) : null;
-        const employees = e.employees != null ? Number(e.employees) : null;
+      viable.map(c => {
+        const f = factMap.get(c.name.toLowerCase()) ?? {};
+        const s = scoreMap.get(c.name.toLowerCase()) ?? {};
+        const totalFundingM = (f as FactData).totalFundingM ?? null;
+        const employees = (f as FactData).employees ?? null;
 
-        // Apply ARR floor rules server-side as a safety net
-        let arrEstimate = e.arrEstimate != null ? Number(e.arrEstimate) : null;
-        const floor = arrFloor(totalFundingM, employees);
+        let arrEstimate = (f as FactData).arrEstimate ?? null;
+        const floor = arrFloor(totalFundingM ?? null, employees ?? null);
         if (floor != null && (arrEstimate == null || arrEstimate < floor)) {
           arrEstimate = Math.round(floor * 10) / 10;
         }
+
+        const sd = (s as ScoreData).scoreBreakdown;
 
         return db.company.create({
           data: {
@@ -285,34 +300,26 @@ Return ONLY the JSON array — no markdown, no explanation.`;
             subSector: c.subSector ?? null,
             geography: c.geography ?? null,
             founded: c.founded ?? null,
-            stage: e.stage ? String(e.stage) : null,
-            totalFundingM,
-            employees,
+            stage: (f as FactData).stage ?? null,
+            totalFundingM: totalFundingM ?? null,
+            employees: employees ?? null,
             arrEstimate,
-            arrGrowth: e.arrGrowth != null ? Number(e.arrGrowth) : null,
-            nrrEstimate: e.nrrEstimate != null ? Number(e.nrrEstimate) : null,
-            grossMargin: e.grossMargin != null ? Number(e.grossMargin) : null,
+            arrGrowth: (f as FactData).arrGrowth ?? null,
             status: "LEAD",
             priority: "MEDIUM",
-            source: e.source
-              ? String(e.source)
+            source: (f as FactData).source
+              ? String((f as FactData).source)
               : searchSucceeded ? "AI recommendation (web-verified)" : "AI recommendation",
-            recommendationRationale: e.recommendationRationale ? String(e.recommendationRationale) : null,
-            recommendationScore: e.recommendationScore != null ? Number(e.recommendationScore) : null,
-            scoreBreakdown: Array.isArray(e.scoreBreakdown) && e.scoreBreakdown.length > 0
-              ? JSON.stringify(e.scoreBreakdown)
-              : null,
+            recommendationRationale: (s as ScoreData).recommendationRationale ?? null,
+            recommendationScore: (s as ScoreData).recommendationScore ?? null,
+            scoreBreakdown: Array.isArray(sd) && sd.length > 0 ? JSON.stringify(sd) : null,
             recommendedAt: now,
           },
         });
       })
     );
 
-    return NextResponse.json({
-      generated: created.length,
-      webSearchUsed: searchSucceeded,
-      filtered: acquiredNames,
-    });
+    return NextResponse.json({ generated: created.length, webSearchUsed: searchSucceeded, filtered: acquiredNames });
 
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
