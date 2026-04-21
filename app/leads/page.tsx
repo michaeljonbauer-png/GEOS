@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Sparkles, ThumbsUp, ThumbsDown, ExternalLink,
   RefreshCw, TrendingUp, Users, DollarSign, AlertCircle,
-  Search,
+  Search, ChevronDown, ChevronUp, CheckCircle2, XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -28,6 +28,7 @@ interface Lead {
   source: string | null;
   recommendationRationale: string | null;
   recommendationScore: number | null;
+  scoreBreakdown: string | null;
 }
 
 const QUEUE_TARGET = 9;
@@ -51,6 +52,53 @@ function MetricPill({ icon: Icon, label, value }: { icon: React.ElementType; lab
       <Icon size={11} className="text-slate-400" />
       <span className="text-[10px] text-slate-400 uppercase tracking-wide leading-none">{label}</span>
       <span className="text-xs font-semibold text-slate-700">{value}</span>
+    </div>
+  );
+}
+
+interface ScoreCriterion {
+  criterion: string;
+  met: boolean;
+  score: number;
+  note: string;
+}
+
+function ScoreBreakdownPanel({ breakdown }: { breakdown: string }) {
+  const [open, setOpen] = useState(false);
+  let criteria: ScoreCriterion[] = [];
+  try { criteria = JSON.parse(breakdown); } catch { return null; }
+  if (!criteria.length) return null;
+
+  return (
+    <div className="mb-3">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-slate-600 uppercase tracking-widest transition-colors w-full"
+      >
+        {open ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+        Score breakdown
+      </button>
+      {open && (
+        <div className="mt-2 space-y-1.5 border border-slate-100 rounded-lg p-2.5 bg-slate-50">
+          {criteria.map((c, i) => (
+            <div key={i} className="flex items-start gap-2">
+              {c.met
+                ? <CheckCircle2 size={12} className="text-emerald-500 shrink-0 mt-0.5" />
+                : <XCircle size={12} className="text-slate-300 shrink-0 mt-0.5" />
+              }
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-medium text-slate-700 truncate">{c.criterion}</span>
+                  <span className={`text-[10px] font-bold tabular-nums shrink-0 ${
+                    c.score >= 70 ? "text-emerald-600" : c.score >= 40 ? "text-amber-600" : "text-red-400"
+                  }`}>{c.score}</span>
+                </div>
+                <p className="text-[10px] text-slate-400 leading-tight mt-0.5">{c.note}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -154,6 +202,9 @@ function LeadCard({
           <p className="text-xs text-violet-900 leading-relaxed">{lead.recommendationRationale}</p>
         </div>
       )}
+
+      {/* Score breakdown */}
+      {lead.scoreBreakdown && <ScoreBreakdownPanel breakdown={lead.scoreBreakdown} />}
 
       {/* Key metrics */}
       <div className="grid grid-cols-3 gap-1 py-2.5 border-y border-slate-100 mb-3">

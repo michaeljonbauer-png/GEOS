@@ -42,6 +42,7 @@ model Company {
   recommendationRationale String?  // why this fits the thesis
   recommendedAt           DateTime? // when it was surfaced as a lead
   recommendationScore     Float?   // AI fit score 0-100
+  scoreBreakdown          String?  // JSON: [{criterion, score, note, met}]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

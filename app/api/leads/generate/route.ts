@@ -148,17 +148,18 @@ Return ONLY a JSON array. Each element:
     const candidates: Array<{ name: string; website?: string; sector?: string; subSector?: string; geography?: string; founded?: number; description?: string }> = JSON.parse(selectionMatch[0]);
 
     // ── Phase 3: Enrich each candidate with one targeted funding search ───────
-    const enrichmentPrompt = `You are a research analyst. Today is ${today}.
+    const enrichmentPrompt = `You are a research analyst scoring B2B SaaS companies for a growth equity investor. Today is ${today}.
 
-For each company below, search for its current funding and headcount, then return corrected estimates.
+INVESTOR THESIS CRITERIA (score each company against ALL of these):
+${thesisSummary}
 
 COMPANIES TO RESEARCH:
 ${candidates.map((c, i) => `${i + 1}. ${c.name} (${c.website ?? "unknown website"})`).join("\n")}
 
 For each company, do ONE search: "<company name> acquired funding employees"
-This single query will surface acquisition news, total funding raised, and headcount simultaneously.
+This surfaces acquisition news, total funding raised, and headcount simultaneously.
 
-Then return a JSON array with one object per company:
+Return a JSON array with one object per company:
 {
   "name": "Company Name",
   "acquired": <true if acquired, PE-owned, gone public, or part of a roll-up — false otherwise>,
@@ -166,40 +167,41 @@ Then return a JSON array with one object per company:
   "stage": "Series B",
   "totalFundingM": <total $M raised — sum ALL rounds>,
   "employees": <current headcount>,
-  "arrEstimate": <ARR in $M — USE RULES BELOW>,
+  "arrEstimate": <ARR in $M — USE ARR RULES BELOW>,
   "arrGrowth": <estimated YoY % growth>,
   "nrrEstimate": <estimated NRR %>,
   "grossMargin": <estimated gross margin %>,
-  "recommendationScore": <0-100 fit score>,
-  "recommendationRationale": "2-3 sentences on thesis fit",
-  "source": "What you found: e.g. 'Series C $39M (2023 PR Newswire); 152 employees (LinkedIn 2025)'"
+  "recommendationRationale": "2-3 sentences: how it fits the thesis overall",
+  "scoreBreakdown": [
+    {
+      "criterion": "Exact criterion name from thesis above",
+      "met": true,
+      "score": <0-100 how well this criterion is met>,
+      "note": "1 sentence: specific evidence or reason for this score"
+    }
+  ],
+  "recommendationScore": <weighted average of scoreBreakdown scores, 0-100>,
+  "source": "e.g. 'Series C $39M (2023 PR Newswire); 152 employees (LinkedIn 2025)'"
 }
 
-ACQUISITION CHECK — this is critical. If the search shows ANY of these, set acquired: true:
+SCORING RULES:
+- Score each criterion in the thesis independently (0 = completely fails, 100 = perfect match)
+- met: true if the company clearly satisfies the criterion; false if it falls short or is uncertain
+- recommendationScore = weighted average of all criterion scores (hard filter failures should drag the overall score below 50)
+- Be honest: a company with 2 of 5 criteria met should score ~40, not 70
+
+ACQUISITION CHECK — if the search shows ANY of these, set acquired: true:
 - "acquired by", "acquisition", "merger", "joins [company]"
-- PE firm ownership (Vista Equity, Thoma Bravo, Francisco Partners, etc.)
+- PE firm ownership (Vista Equity, Thoma Bravo, Francisco Partners, KKR, Bain Capital, etc.)
 - IPO or SPAC listing
 - "subsidiary of", "now part of", "portfolio company of"
 
 ARR ESTIMATION RULES — follow these strictly:
 1. Start with: employees × $250K = ARR baseline
-2. Also compute: totalFundingM ÷ 5 = ARR lower bound (VCs invest at ~5x ARR)
-3. ARR estimate = MAX of (baseline, lower bound, stage floor below)
-4. Stage floors (MINIMUM values — never go below these):
-   - Seed / Pre-Seed: $0.5M ARR
-   - Series A: $3M ARR
-   - Series B: $12M ARR
-   - Series C: $25M ARR
-   - Series D+: $50M ARR
-5. If total funding >$50M → ARR is AT LEAST $15M
-6. If total funding >$80M → ARR is AT LEAST $25M
-7. If 100+ employees → ARR is AT LEAST $10M
-
-Example: 152 employees, $79M total raised, Series C
-  → baseline: 152 × $250K = $38M
-  → lower bound: $79M ÷ 5 = $15.8M
-  → stage floor: $25M
-  → ARR estimate = $38M ✓ (NOT $3.8M)
+2. Also compute: totalFundingM ÷ 5 = ARR lower bound
+3. ARR estimate = MAX of (baseline, lower bound, stage floor)
+4. Stage floors: Seed $0.5M, Series A $3M, Series B $12M, Series C $25M, Series D+ $50M
+5. >$50M raised → ARR ≥ $15M; >$80M raised → ARR ≥ $25M; 100+ employees → ARR ≥ $10M
 
 Return ONLY the JSON array — no markdown, no explanation.`;
 
@@ -297,6 +299,9 @@ Return ONLY the JSON array — no markdown, no explanation.`;
               : searchSucceeded ? "AI recommendation (web-verified)" : "AI recommendation",
             recommendationRationale: e.recommendationRationale ? String(e.recommendationRationale) : null,
             recommendationScore: e.recommendationScore != null ? Number(e.recommendationScore) : null,
+            scoreBreakdown: Array.isArray(e.scoreBreakdown) && e.scoreBreakdown.length > 0
+              ? JSON.stringify(e.scoreBreakdown)
+              : null,
             recommendedAt: now,
           },
         });
