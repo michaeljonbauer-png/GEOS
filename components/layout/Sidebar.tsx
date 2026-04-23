@@ -14,6 +14,7 @@ import {
   Briefcase,
   Users,
   Sparkles,
+  Radar,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: Sparkles },
+  { href: "/hunt", label: "Hunt", icon: Radar },
   { href: "/companies", label: "Companies", icon: Building2 },
   { href: "/pipeline", label: "Pipeline", icon: GitMerge },
   { href: "/outreach", label: "Outreach", icon: Send },
