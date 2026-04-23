@@ -133,7 +133,7 @@ export async function POST() {
     try {
       const msg = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 4000,
+        max_tokens: 8000,
         messages: [{
           role: "user",
           content: `Growth equity investor — B2B SaaS lead sourcing. Today: ${today}.
@@ -181,13 +181,31 @@ SCORING: score each criterion 0-100. met=true if clearly satisfied. recommendati
         }],
       });
 
+      if (msg.stop_reason === "max_tokens") {
+        console.error("Lead generation response was truncated (max_tokens hit)");
+        return NextResponse.json(
+          { error: "Response was too long and got cut off. Try again — it should work on the next attempt." },
+          { status: 500 }
+        );
+      }
+
       const text = msg.content
         .filter(b => b.type === "text")
         .map(b => (b as { type: "text"; text: string }).text)
         .join("\n");
 
       const match = text.match(/\[[\s\S]*\]/);
-      if (match) companies = JSON.parse(match[0]);
+      if (match) {
+        try {
+          companies = JSON.parse(match[0]);
+        } catch {
+          console.error("JSON parse failed. Raw text:", text.slice(0, 500));
+          return NextResponse.json(
+            { error: "Could not parse company list. Try again." },
+            { status: 500 }
+          );
+        }
+      }
     } catch (err) {
       const errResponse = handleApiError(err);
       if (errResponse) return errResponse;
