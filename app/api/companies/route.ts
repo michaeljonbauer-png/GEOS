@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
       name, website, description, sector, subSector, geography,
       arrEstimate, arrGrowth, nrrEstimate, grossMargin, employees,
       founded, stage, status, priority, source, linkedinUrl, crunchbaseUrl,
+      totalFundingM,
     } = body;
 
     if (!name) {
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
     const company = await db.company.create({
       data: {
         name, website, description, sector, subSector, geography,
+        totalFundingM: totalFundingM ? Number(totalFundingM) : null,
         arrEstimate: arrEstimate ? Number(arrEstimate) : null,
         arrGrowth: arrGrowth ? Number(arrGrowth) : null,
         nrrEstimate: nrrEstimate ? Number(nrrEstimate) : null,
