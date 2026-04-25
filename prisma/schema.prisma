@@ -331,6 +331,7 @@ model CompanyCustomValue {
 model Comp {
   id          String    @id @default(cuid())
   companyName String
+  industry    String?
   buyer       String?
   dealDate    DateTime?
   tev         Float?    // Total Enterprise Value $M

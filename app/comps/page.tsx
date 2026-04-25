@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 
 interface Comp {
-  id: string; companyName: string; buyer: string | null; dealDate: string | null;
+  id: string; companyName: string; industry: string | null; buyer: string | null; dealDate: string | null;
   tev: number | null; arr: number | null; revenue: number | null;
   grossMargin: number | null; yoyGrowth: number | null; ebitda: number | null;
   gdr: number | null; ndr: number | null; notes: string | null;
@@ -15,7 +15,7 @@ interface Comp {
 type CompForm = Omit<Comp, "id">;
 
 const EMPTY_FORM: CompForm = {
-  companyName: "", buyer: null, dealDate: null, tev: null, arr: null,
+  companyName: "", industry: null, buyer: null, dealDate: null, tev: null, arr: null,
   revenue: null, grossMargin: null, yoyGrowth: null, ebitda: null,
   gdr: null, ndr: null, notes: null,
 };
@@ -66,6 +66,10 @@ function CompModal({ comp, onSave, onClose }: {
           <div className="col-span-2">
             <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Company name *</label>
             <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={form.companyName} onChange={e => set("companyName", e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Industry</label>
+            <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="e.g. Field Service Management" value={form.industry ?? ""} onChange={e => set("industry", e.target.value)} />
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Buyer / Acquirer</label>
@@ -176,6 +180,7 @@ export default function CompsPage() {
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
                 <TH className="sticky left-0 bg-slate-50 z-10">Company</TH>
+                <TH>Industry</TH>
                 <TH>Buyer</TH>
                 <TH>Date</TH>
                 <TH>TEV ($M)</TH>
@@ -195,6 +200,7 @@ export default function CompsPage() {
               {comps.map(c => (
                 <tr key={c.id} className="hover:bg-slate-50 transition-colors">
                   <TD className="sticky left-0 bg-white font-medium text-slate-900 z-10">{c.companyName}</TD>
+                  <TD>{c.industry ?? "—"}</TD>
                   <TD>{c.buyer ?? "—"}</TD>
                   <TD>{c.dealDate ? new Date(c.dealDate).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "—"}</TD>
                   <TD>{fmt(c.tev, "$")}</TD>

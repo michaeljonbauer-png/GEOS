@@ -10,6 +10,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       where: { id: params.id },
       data: {
         companyName: body.companyName,
+        industry: body.industry ?? null,
         buyer: body.buyer ?? null,
         dealDate: body.dealDate ? new Date(body.dealDate) : null,
         tev: body.tev != null ? Number(body.tev) : null,

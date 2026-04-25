@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     const comp = await db.comp.create({
       data: {
         companyName: body.companyName,
+        industry: body.industry ?? null,
         buyer: body.buyer ?? null,
         dealDate: body.dealDate ? new Date(body.dealDate) : null,
         tev: body.tev != null ? Number(body.tev) : null,
