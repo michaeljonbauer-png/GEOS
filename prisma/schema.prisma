@@ -326,6 +326,26 @@ model CompanyCustomValue {
   @@unique([fieldId, companyId])
 }
 
+// ── Valuation Comparables ─────────────────────────────────────────────────────
+
+model Comp {
+  id          String    @id @default(cuid())
+  companyName String
+  buyer       String?
+  dealDate    DateTime?
+  tev         Float?    // Total Enterprise Value $M
+  arr         Float?    // ARR $M
+  revenue     Float?    // Revenue $M
+  grossMargin Float?    // GM %
+  yoyGrowth   Float?    // YoY Growth %
+  ebitda      Float?    // EBITDA $M
+  gdr         Float?    // Gross Dollar Retention %
+  ndr         Float?    // Net Dollar Retention %
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
 // Aggregated research data from external sources for a company
 model CompanyResearch {
   id        String  @id @default(cuid())

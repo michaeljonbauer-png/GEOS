@@ -14,6 +14,7 @@ import {
   Briefcase,
   Users,
   Sparkles,
+  Scale,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ const navItems = [
   { href: "/sourcing", label: "Sourcing", icon: Sparkles },
   { href: "/companies", label: "Companies", icon: Building2 },
   { href: "/pipeline", label: "Pipeline", icon: GitMerge },
+  { href: "/comps", label: "Comps", icon: Scale },
   { href: "/outreach", label: "Outreach", icon: Send },
   { href: "/crm", label: "Activity", icon: ActivitySquare },
 ];
