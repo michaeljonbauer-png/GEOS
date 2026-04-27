@@ -1,232 +1,268 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Scale } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { Trash2, Scale, Loader2, Check } from "lucide-react";
 
-interface Comp {
-  id: string; companyName: string; industry: string | null; buyer: string | null; dealDate: string | null;
-  tev: number | null; arr: number | null; revenue: number | null;
-  grossMargin: number | null; yoyGrowth: number | null; ebitda: number | null;
-  gdr: number | null; ndr: number | null; notes: string | null;
+interface CompData {
+  companyName: string; industry: string; buyer: string; dealDate: string;
+  tev: string; arr: string; revenue: string; grossMargin: string;
+  yoyGrowth: string; ebitda: string; gdr: string; ndr: string; notes: string;
 }
 
-type CompForm = Omit<Comp, "id">;
+interface SavedComp extends CompData { id: string; }
 
-const EMPTY_FORM: CompForm = {
-  companyName: "", industry: null, buyer: null, dealDate: null, tev: null, arr: null,
-  revenue: null, grossMargin: null, yoyGrowth: null, ebitda: null,
-  gdr: null, ndr: null, notes: null,
+const EMPTY: CompData = {
+  companyName: "", industry: "", buyer: "", dealDate: "",
+  tev: "", arr: "", revenue: "", grossMargin: "",
+  yoyGrowth: "", ebitda: "", gdr: "", ndr: "", notes: "",
 };
 
-const fmt = (v: number | null, prefix = "", suffix = "", decimals = 1) =>
-  v != null ? `${prefix}${v.toFixed(decimals)}${suffix}` : "—";
+const COLS: { key: keyof CompData; label: string; type: string; width: string }[] = [
+  { key: "companyName", label: "Company",     type: "text",   width: "min-w-[160px]" },
+  { key: "industry",    label: "Industry",    type: "text",   width: "min-w-[140px]" },
+  { key: "buyer",       label: "Buyer",       type: "text",   width: "min-w-[140px]" },
+  { key: "dealDate",    label: "Date",        type: "date",   width: "min-w-[130px]" },
+  { key: "tev",         label: "TEV ($M)",    type: "number", width: "min-w-[90px]"  },
+  { key: "arr",         label: "ARR ($M)",    type: "number", width: "min-w-[90px]"  },
+  { key: "revenue",     label: "Rev ($M)",    type: "number", width: "min-w-[90px]"  },
+  { key: "grossMargin", label: "GM%",         type: "number", width: "min-w-[70px]"  },
+  { key: "yoyGrowth",   label: "Growth%",     type: "number", width: "min-w-[80px]"  },
+  { key: "ebitda",      label: "EBITDA ($M)", type: "number", width: "min-w-[100px]" },
+  { key: "gdr",         label: "GDR%",        type: "number", width: "min-w-[70px]"  },
+  { key: "ndr",         label: "NDR%",        type: "number", width: "min-w-[70px]"  },
+  { key: "notes",       label: "Notes",       type: "text",   width: "min-w-[160px]" },
+];
 
-const multiple = (tev: number | null, base: number | null) =>
-  tev != null && base != null && base !== 0 ? `${(tev / base).toFixed(1)}×` : "—";
-
-function CompModal({ comp, onSave, onClose }: {
-  comp: CompForm & { id?: string };
-  onSave: (data: CompForm) => Promise<void>;
-  onClose: () => void;
-}) {
-  const [form, setForm] = useState<CompForm>({ ...comp });
-  const [saving, setSaving] = useState(false);
-
-  const set = (k: keyof CompForm, v: string) =>
-    setForm(f => ({ ...f, [k]: v === "" ? null : v }));
-
-  const numField = (label: string, key: keyof CompForm, unit: string) => (
-    <div>
-      <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">{label} <span className="font-normal normal-case text-slate-400">{unit}</span></label>
-      <input
-        type="number" step="any"
-        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-        value={form[key] ?? ""}
-        onChange={e => set(key, e.target.value)}
-      />
-    </div>
-  );
-
-  const handleSave = async () => {
-    if (!form.companyName.trim()) return;
-    setSaving(true);
-    await onSave(form);
-    setSaving(false);
+function fromDb(c: Record<string, unknown>): SavedComp {
+  return {
+    id: c.id as string,
+    companyName: (c.companyName as string) ?? "",
+    industry:    (c.industry    as string) ?? "",
+    buyer:       (c.buyer       as string) ?? "",
+    dealDate:    c.dealDate ? (c.dealDate as string).slice(0, 10) : "",
+    tev:         c.tev         != null ? String(c.tev)         : "",
+    arr:         c.arr         != null ? String(c.arr)         : "",
+    revenue:     c.revenue     != null ? String(c.revenue)     : "",
+    grossMargin: c.grossMargin != null ? String(c.grossMargin) : "",
+    yoyGrowth:   c.yoyGrowth   != null ? String(c.yoyGrowth)   : "",
+    ebitda:      c.ebitda      != null ? String(c.ebitda)      : "",
+    gdr:         c.gdr         != null ? String(c.gdr)         : "",
+    ndr:         c.ndr         != null ? String(c.ndr)         : "",
+    notes:       (c.notes as string) ?? "",
   };
+}
 
+function toBody(d: CompData) {
+  const n = (s: string) => s.trim() ? Number(s) : null;
+  return {
+    companyName: d.companyName.trim(),
+    industry:    d.industry.trim()    || null,
+    buyer:       d.buyer.trim()       || null,
+    dealDate:    d.dealDate           || null,
+    tev:         n(d.tev),  arr: n(d.arr),  revenue: n(d.revenue),
+    grossMargin: n(d.grossMargin),  yoyGrowth: n(d.yoyGrowth),
+    ebitda:      n(d.ebitda),  gdr: n(d.gdr),  ndr: n(d.ndr),
+    notes:       d.notes.trim()       || null,
+  };
+}
+
+function calcX(tev: string, base: string) {
+  const t = parseFloat(tev), b = parseFloat(base);
+  return t > 0 && b > 0 ? `${(t / b).toFixed(1)}×` : "—";
+}
+
+const CELL_CLS = "w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-300 border border-transparent focus:border-blue-400 focus:bg-white focus:shadow-[0_0_0_2px_rgba(59,130,246,0.15)] rounded px-1.5 py-1 outline-none transition-all";
+
+function CellInput({ value, onChange, type, placeholder = "" }: {
+  value: string; onChange: (v: string) => void; type: string; placeholder?: string;
+}) {
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-100">
-          <h2 className="text-base font-bold text-slate-900">{comp.id ? "Edit comp" : "Add comp"}</h2>
-        </div>
-        <div className="p-6 grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Company name *</label>
-            <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={form.companyName} onChange={e => set("companyName", e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Industry</label>
-            <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" placeholder="e.g. Field Service Management" value={form.industry ?? ""} onChange={e => set("industry", e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Buyer / Acquirer</label>
-            <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={form.buyer ?? ""} onChange={e => set("buyer", e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Deal date</label>
-            <input type="date" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" value={form.dealDate ? form.dealDate.slice(0, 10) : ""} onChange={e => set("dealDate", e.target.value)} />
-          </div>
-          {numField("TEV", "tev", "($M)")}
-          {numField("ARR", "arr", "($M)")}
-          {numField("Revenue", "revenue", "($M)")}
-          {numField("Gross Margin", "grossMargin", "(%)")}
-          {numField("YoY Growth", "yoyGrowth", "(%)")}
-          {numField("EBITDA", "ebitda", "($M)")}
-          {numField("GDR", "gdr", "(%)")}
-          {numField("NDR", "ndr", "(%)")}
-          <div className="col-span-2">
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Notes</label>
-            <textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none" rows={2} value={form.notes ?? ""} onChange={e => set("notes", e.target.value)} />
-          </div>
-          <div className="col-span-2 bg-slate-50 rounded-lg px-4 py-3 grid grid-cols-2 gap-2">
-            <p className="text-[11px] text-slate-500">ARR Multiple (auto): <span className="font-bold text-slate-700">{multiple(form.tev as number | null, form.arr as number | null)}</span></p>
-            <p className="text-[11px] text-slate-500">EBITDA Multiple (auto): <span className="font-bold text-slate-700">{multiple(form.tev as number | null, form.ebitda as number | null)}</span></p>
-          </div>
-        </div>
-        <div className="flex justify-end gap-3 px-6 pb-6">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || !form.companyName.trim()} className="bg-blue-600 hover:bg-blue-700 text-white">
-            {saving ? "Saving…" : "Save comp"}
-          </Button>
-        </div>
-      </div>
-    </div>
+    <input
+      type={type}
+      step={type === "number" ? "any" : undefined}
+      className={CELL_CLS}
+      value={value}
+      placeholder={placeholder}
+      onChange={e => onChange(e.target.value)}
+    />
   );
 }
 
-const TH = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <th className={`px-3 py-2.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap ${className}`}>{children}</th>
-);
-const TD = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <td className={`px-3 py-2.5 text-sm text-slate-700 whitespace-nowrap ${className}`}>{children}</td>
-);
-const AutoTD = ({ children }: { children: React.ReactNode }) => (
-  <td className="px-3 py-2.5 text-sm font-semibold text-blue-700 whitespace-nowrap bg-blue-50/50">{children}</td>
-);
+function AutoCell({ value }: { value: string }) {
+  return (
+    <td className="px-2 py-1 bg-blue-50/40 text-sm font-semibold text-blue-700 whitespace-nowrap tabular-nums text-right">
+      {value}
+    </td>
+  );
+}
 
 export default function CompsPage() {
-  const { toast } = useToast();
-  const [comps, setComps] = useState<Comp[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState<(CompForm & { id?: string }) | null>(null);
+  const [comps, setComps]       = useState<SavedComp[]>([]);
+  const [edits, setEdits]       = useState<Record<string, CompData>>({});
+  const [saving, setSaving]     = useState<Set<string>>(new Set());
+  const [flashOk, setFlashOk]   = useState<Set<string>>(new Set());
+  const [newRow, setNewRow]     = useState<CompData>({ ...EMPTY });
+  const [savingNew, setSavingNew] = useState(false);
+  const persisted = useRef<Record<string, string>>({});  // JSON of last-saved data per id
 
-  const load = async () => {
-    const res = await fetch("/api/comps");
-    if (res.ok) setComps(await res.json());
-    setLoading(false);
+  useEffect(() => {
+    fetch("/api/comps").then(r => r.json()).then((data: Record<string, unknown>[]) => {
+      const rows = data.map(fromDb);
+      setComps(rows);
+      const e: Record<string, CompData> = {};
+      rows.forEach(r => { e[r.id] = r; persisted.current[r.id] = JSON.stringify(r); });
+      setEdits(e);
+    });
+  }, []);
+
+  const get = (id: string): CompData => edits[id] ?? comps.find(c => c.id === id)!;
+
+  const set = (id: string, key: keyof CompData, val: string) =>
+    setEdits(prev => ({ ...prev, [id]: { ...(prev[id] ?? comps.find(c => c.id === id)!), [key]: val } }));
+
+  const flash = (id: string) => {
+    setFlashOk(prev => new Set(prev).add(id));
+    setTimeout(() => setFlashOk(prev => { const s = new Set(prev); s.delete(id); return s; }), 1500);
   };
 
-  useEffect(() => { load(); }, []);
+  const saveExisting = useCallback(async (id: string) => {
+    const data = edits[id];
+    if (!data?.companyName.trim()) return;
+    if (JSON.stringify(data) === persisted.current[id]) return;  // unchanged
+    setSaving(prev => new Set(prev).add(id));
+    try {
+      const res = await fetch(`/api/comps/${id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(toBody(data)),
+      });
+      if (res.ok) { persisted.current[id] = JSON.stringify(data); flash(id); }
+    } finally {
+      setSaving(prev => { const s = new Set(prev); s.delete(id); return s; });
+    }
+  }, [edits]);
 
-  const save = async (data: CompForm) => {
-    const isEdit = !!(modal as any)?.id;
-    const url = isEdit ? `/api/comps/${(modal as any).id}` : "/api/comps";
-    const res = await fetch(url, { method: isEdit ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    if (!res.ok) { toast({ title: "Save failed", variant: "destructive" }); return; }
-    setModal(null);
-    toast({ title: isEdit ? "Comp updated" : "Comp added" });
-    load();
+  const saveNew = async () => {
+    if (!newRow.companyName.trim() || savingNew) return;
+    setSavingNew(true);
+    try {
+      const res = await fetch("/api/comps", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(toBody(newRow)),
+      });
+      if (!res.ok) return;
+      const created = fromDb(await res.json() as Record<string, unknown>);
+      setComps(prev => [...prev, created]);
+      setEdits(prev => ({ ...prev, [created.id]: created }));
+      persisted.current[created.id] = JSON.stringify(created);
+      setNewRow({ ...EMPTY });
+    } finally { setSavingNew(false); }
   };
 
   const del = async (id: string, name: string) => {
     if (!confirm(`Delete "${name}"?`)) return;
     await fetch(`/api/comps/${id}`, { method: "DELETE" });
-    toast({ title: `"${name}" deleted` });
     setComps(prev => prev.filter(c => c.id !== id));
   };
 
+  const onRowBlur = (id: string) => (e: React.FocusEvent<HTMLTableRowElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) saveExisting(id);
+  };
+
+  const onNewRowBlur = (e: React.FocusEvent<HTMLTableRowElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) saveNew();
+  };
+
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <Scale className="text-blue-500" size={20} />
-            <h1 className="text-xl font-bold text-slate-900">Comps</h1>
-          </div>
-          <p className="text-sm text-slate-500">Track valuation comparables. ARR× and EBITDA× are calculated automatically.</p>
-        </div>
-        <Button onClick={() => setModal(EMPTY_FORM)} className="bg-blue-600 hover:bg-blue-700 text-white">
-          <Plus size={14} className="mr-1.5" />Add comp
-        </Button>
+    <div className="p-6 max-w-[1600px] mx-auto">
+      <div className="flex items-center gap-2.5 mb-1">
+        <Scale className="text-blue-500" size={20} />
+        <h1 className="text-xl font-bold text-slate-900">Comps</h1>
+      </div>
+      <p className="text-sm text-slate-500 mb-5">
+        Click any cell to edit inline. Changes save automatically when you tab or click away.
+        ARR× and EBITDA× calculate automatically.
+      </p>
+
+      <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200">
+              {COLS.map(c => (
+                <th key={c.key} className={`${c.width} px-2 py-2.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap`}>
+                  {c.label}
+                </th>
+              ))}
+              <th className="min-w-[70px] px-2 py-2.5 text-right text-[10px] font-semibold text-blue-400 uppercase tracking-wide bg-blue-50/60">ARR×</th>
+              <th className="min-w-[80px] px-2 py-2.5 text-right text-[10px] font-semibold text-blue-400 uppercase tracking-wide bg-blue-50/60">EBITDA×</th>
+              <th className="w-10 bg-slate-50" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {comps.map(comp => {
+              const d = get(comp.id);
+              return (
+                <tr
+                  key={comp.id}
+                  className="group hover:bg-slate-50/40 transition-colors"
+                  onBlur={onRowBlur(comp.id)}
+                >
+                  {COLS.map(col => (
+                    <td key={col.key} className="px-1 py-0.5">
+                      <CellInput
+                        type={col.type}
+                        value={d?.[col.key] ?? ""}
+                        onChange={v => set(comp.id, col.key, v)}
+                      />
+                    </td>
+                  ))}
+                  <AutoCell value={d ? calcX(d.tev, d.arr) : "—"} />
+                  <AutoCell value={d ? calcX(d.tev, d.ebitda) : "—"} />
+                  <td className="px-1 py-0.5">
+                    <div className="flex items-center justify-center gap-1 h-full">
+                      {saving.has(comp.id)  && <Loader2 size={11} className="text-slate-300 animate-spin" />}
+                      {flashOk.has(comp.id) && !saving.has(comp.id) && <Check size={11} className="text-emerald-400" />}
+                      <button
+                        onClick={() => del(comp.id, comp.companyName)}
+                        className="p-1 text-slate-200 hover:text-red-500 rounded transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+
+            {/* Always-visible new row */}
+            <tr
+              className="bg-slate-50/20 border-t-2 border-dashed border-slate-200 hover:bg-slate-50/40 transition-colors"
+              onBlur={onNewRowBlur}
+            >
+              {COLS.map((col, i) => (
+                <td key={col.key} className="px-1 py-0.5">
+                  <CellInput
+                    type={col.type}
+                    value={newRow[col.key]}
+                    placeholder={i === 0 ? "New comp…" : ""}
+                    onChange={v => setNewRow(prev => ({ ...prev, [col.key]: v }))}
+                  />
+                </td>
+              ))}
+              <AutoCell value={calcX(newRow.tev, newRow.arr)} />
+              <AutoCell value={calcX(newRow.tev, newRow.ebitda)} />
+              <td className="px-1 py-0.5 text-center">
+                {savingNew && <Loader2 size={11} className="text-slate-300 animate-spin mx-auto" />}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
-      {loading && <div className="text-sm text-slate-400 py-12 text-center">Loading…</div>}
-
-      {!loading && comps.length === 0 && (
-        <div className="text-center py-20">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-100 mx-auto mb-4"><Scale className="text-blue-500" size={28} /></div>
-          <h3 className="font-semibold text-slate-800 mb-1">No comps yet</h3>
-          <p className="text-sm text-slate-400 mb-5 max-w-sm mx-auto">Add your first valuation comparable to start building your reference database.</p>
-          <Button onClick={() => setModal(EMPTY_FORM)} className="bg-blue-600 hover:bg-blue-700 text-white"><Plus size={14} className="mr-1.5" />Add first comp</Button>
-        </div>
+      {comps.length === 0 && !savingNew && (
+        <p className="text-xs text-slate-400 text-center mt-3">
+          Type a company name in the row above to add your first comp
+        </p>
       )}
-
-      {!loading && comps.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
-          <table className="w-full bg-white">
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <TH className="sticky left-0 bg-slate-50 z-10">Company</TH>
-                <TH>Industry</TH>
-                <TH>Buyer</TH>
-                <TH>Date</TH>
-                <TH>TEV ($M)</TH>
-                <TH>ARR ($M)</TH>
-                <TH>Rev ($M)</TH>
-                <TH>GM%</TH>
-                <TH>Growth</TH>
-                <TH>EBITDA ($M)</TH>
-                <TH>GDR%</TH>
-                <TH>NDR%</TH>
-                <TH className="bg-blue-50/50 text-blue-500">ARR×</TH>
-                <TH className="bg-blue-50/50 text-blue-500">EBITDA×</TH>
-                <TH>{""}</TH>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {comps.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                  <TD className="sticky left-0 bg-white font-medium text-slate-900 z-10">{c.companyName}</TD>
-                  <TD>{c.industry ?? "—"}</TD>
-                  <TD>{c.buyer ?? "—"}</TD>
-                  <TD>{c.dealDate ? new Date(c.dealDate).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "—"}</TD>
-                  <TD>{fmt(c.tev, "$")}</TD>
-                  <TD>{fmt(c.arr, "$")}</TD>
-                  <TD>{fmt(c.revenue, "$")}</TD>
-                  <TD>{fmt(c.grossMargin, "", "%", 0)}</TD>
-                  <TD>{fmt(c.yoyGrowth, "", "%", 0)}</TD>
-                  <TD>{fmt(c.ebitda, "$")}</TD>
-                  <TD>{fmt(c.gdr, "", "%", 0)}</TD>
-                  <TD>{fmt(c.ndr, "", "%", 0)}</TD>
-                  <AutoTD>{multiple(c.tev, c.arr)}</AutoTD>
-                  <AutoTD>{multiple(c.tev, c.ebitda)}</AutoTD>
-                  <TD>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setModal({ ...c })} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"><Pencil size={13} /></button>
-                      <button onClick={() => del(c.id, c.companyName)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"><Trash2 size={13} /></button>
-                    </div>
-                  </TD>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {modal && <CompModal comp={modal} onSave={save} onClose={() => setModal(null)} />}
     </div>
   );
 }
