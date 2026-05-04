@@ -24,7 +24,8 @@ interface CashflowRow {
 }
 
 interface Outputs {
-  annualFee: number; totalMgmtFees: number; investedCapital: number;
+  feeCommitted: number; feeDeployed: number; feeCommittedYears: number; feeDeployedYears: number;
+  totalMgmtFees: number; investedCapital: number;
   grossProceeds: number; grossMoicOnFund: number; grossIrr: number | null;
   fundProfit: number; gpCarry: number; gpTotalEconomics: number;
   lpNetProceeds: number; lpNetMoic: number; lpNetIrr: number | null;
@@ -54,11 +55,17 @@ function calcIrr(cfs: number[]): number | null {
 
 function runModel(inp: Inputs): Outputs {
   const { fundSize, deployYears, holdYears, grossMoic, mgmtFeeRate, carryRate, fundLife } = inp;
+  const r = mgmtFeeRate / 100;
 
-  const annualFee      = (fundSize * mgmtFeeRate) / 100;
-  const totalMgmtFees  = annualFee * fundLife;
-  const investedCapital = Math.max(0, fundSize - totalMgmtFees);
-  const capPerYear     = investedCapital / deployYears;
+  // Two-phase fees: years 1–5 on committed capital, remainder on deployed capital.
+  // Closed-form: investedCapital*(1 + p2*r) = fundSize*(1 - p1*r)
+  const feeCommittedYears = Math.min(5, fundLife);
+  const feeDeployedYears  = Math.max(0, fundLife - feeCommittedYears);
+  const investedCapital   = fundSize * (1 - feeCommittedYears * r) / (1 + feeDeployedYears * r);
+  const feeCommitted      = fundSize * r;
+  const feeDeployed       = investedCapital * r;
+  const totalMgmtFees     = feeCommittedYears * feeCommitted + feeDeployedYears * feeDeployed;
+  const capPerYear        = investedCapital / deployYears;
   const grossProceeds  = investedCapital * grossMoic;
 
   const lpCapital  = fundSize;
@@ -85,7 +92,7 @@ function runModel(inp: Inputs): Outputs {
   const grsIrrCfs = new Array(maxYear + 1).fill(0);
 
   for (let t = 1; t <= maxYear; t++) {
-    const fee       = t <= fundLife ? annualFee : 0;
+    const fee       = t <= fundLife ? (t <= feeCommittedYears ? feeCommitted : feeDeployed) : 0;
     const lpCall    = -(inv[t] + fee);
     const grossExit = exits[t];
     let lpNetDist = 0, gpCarryDist = 0;
@@ -111,7 +118,8 @@ function runModel(inp: Inputs): Outputs {
   }
 
   return {
-    annualFee, totalMgmtFees, investedCapital,
+    feeCommitted, feeDeployed, feeCommittedYears, feeDeployedYears,
+    totalMgmtFees, investedCapital,
     grossProceeds, grossMoicOnFund: grossProceeds / fundSize,
     grossIrr: calcIrr(grsIrrCfs),
     fundProfit, gpCarry, gpTotalEconomics,
@@ -224,22 +232,12 @@ export default function FundModelPage() {
               className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600" />
             <div className="flex justify-between text-[10px] text-slate-400">
               <span>Investable: <strong className="text-slate-600">${out.investedCapital.toFixed(1)}M</strong></span>
-              <span>Fees: <strong className="text-slate-600">${out.totalMgmtFees.toFixed(1)}M</strong></span>
+              <span>Total fees: <strong className="text-slate-600">${out.totalMgmtFees.toFixed(1)}M</strong></span>
             </div>
           </div>
 
-          {/* Deployment */}
-          <div className="space-y-2">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Deployment Period</span>
-            <div className="flex gap-2 mt-1">
-              {[2, 3, 4].map(y => (
-                <button key={y} onClick={() => set("deployYears")(y)}
-                  className={`flex-1 py-2 text-sm font-bold rounded-lg border transition-colors ${inp.deployYears === y ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600"}`}>
-                  {y}Y
-                </button>
-              ))}
-            </div>
-          </div>
+          <Slider label="Deployment Period" value={inp.deployYears} min={1} max={6} step={1}
+            onChange={set("deployYears")} display={`${inp.deployYears} yrs`} />
 
           <Slider label="Avg Hold Period" value={inp.holdYears} min={2} max={8} step={1}
             onChange={set("holdYears")} display={`${inp.holdYears} yrs`} />
@@ -360,8 +358,9 @@ export default function FundModelPage() {
           </table>
         </div>
         <p className="text-[11px] text-slate-400 mt-2">
-          LP calls are parenthesized. Mgmt fees ({fm(out.annualFee)}/yr) are included in LP calls.
-          Exits are distributed uniformly: deployYears investments each exiting after {inp.holdYears} years.
+          LP calls are parenthesized. Fees: {fm(out.feeCommitted)}/yr on committed (yrs 1–{out.feeCommittedYears}),
+          then {fm(out.feeDeployed)}/yr on deployed (yrs {out.feeCommittedYears + 1}–{inp.fundLife}).
+          Exits distributed uniformly across deployment cohorts after {inp.holdYears}-yr hold.
         </p>
       </div>
 
