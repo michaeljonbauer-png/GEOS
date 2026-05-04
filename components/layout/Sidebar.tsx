@@ -15,6 +15,7 @@ import {
   Users,
   Sparkles,
   Scale,
+  Calculator,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,7 @@ const dealItems = [
   { href: "/live-deal", label: "Live Deal", icon: Briefcase },
   { href: "/portfolio", label: "Portfolio", icon: BarChart3 },
   { href: "/lp-reporting", label: "LP Communications", icon: Users },
+  { href: "/fund-model", label: "GP Fund Model", icon: Calculator },
 ];
 
 export default function Sidebar() {
