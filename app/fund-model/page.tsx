@@ -225,7 +225,7 @@ export default function FundModelPage() {
   ];
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-8">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 sm:space-y-8">
 
       {/* Header */}
       <div>
@@ -239,7 +239,7 @@ export default function FundModelPage() {
       {/* Inputs */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
         <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-5">Parameters</p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 sm:gap-x-8 gap-y-5">
 
           {/* Fund size */}
           <div className="space-y-2">
@@ -303,7 +303,7 @@ export default function FundModelPage() {
       {/* Scenario table */}
       <div>
         <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Scenario Analysis</p>
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
@@ -334,7 +334,7 @@ export default function FundModelPage() {
       {/* Cash flows */}
       <div>
         <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Annual Cash Flows — Base Case</p>
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">

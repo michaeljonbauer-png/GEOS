@@ -173,7 +173,7 @@ export default function CompsPage() {
   };
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
+    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto">
       <div className="flex items-center gap-2.5 mb-1">
         <Scale className="text-blue-500" size={20} />
         <h1 className="text-xl font-bold text-slate-900">Comps</h1>

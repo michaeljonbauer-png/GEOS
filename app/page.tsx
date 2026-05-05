@@ -152,7 +152,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
@@ -162,17 +162,17 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-5 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6 sm:mb-8">
         {stats.map(({ label, value, icon: Icon, color, bg, href }) => (
           <Link key={label} href={href}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardContent className="p-5">
+              <CardContent className="p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
                       {label}
                     </p>
-                    <p className="text-3xl font-bold text-slate-900 mt-1">
+                    <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">
                       {value}
                     </p>
                   </div>
@@ -187,7 +187,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Pipeline Chart + Top Scored */}
-      <div className="grid grid-cols-3 gap-5 mb-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 mb-4 sm:mb-5">
         {/* Pipeline funnel */}
         <Card className="col-span-2">
           <CardHeader className="pb-2">
@@ -269,7 +269,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Activity + Recently Added */}
-      <div className="grid grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
         {/* Recent activity */}
         <Card>
           <CardHeader className="pb-2">
