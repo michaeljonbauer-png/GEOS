@@ -13,7 +13,8 @@ interface Inputs {
   mgmtFeeRate: number;
   carryRate: number;
   fundLife: number;
-  recycleRate: number; // % of invested capital recycled back into new deals
+  recycleRate: number;
+  waterfall: "american" | "european";
 }
 
 interface CashflowRow {
@@ -55,7 +56,7 @@ function calcIrr(cfs: number[]): number | null {
 }
 
 function runModel(inp: Inputs): Outputs {
-  const { fundSize, deployYears, holdYears, grossMoic, mgmtFeeRate, carryRate, fundLife, recycleRate } = inp;
+  const { fundSize, deployYears, holdYears, grossMoic, mgmtFeeRate, carryRate, fundLife, recycleRate, waterfall } = inp;
   const r = mgmtFeeRate / 100;
 
   // Two-phase fees: years 1–5 on committed capital; years 6+ on remaining cost basis only,
@@ -81,7 +82,9 @@ function runModel(inp: Inputs): Outputs {
   const grossProceeds  = totalDeployed * grossMoic;
 
   const lpCapital  = fundSize;
-  const fundProfit = Math.max(0, grossProceeds - lpCapital);
+  // American: profit above deployed cost basis. European: profit above full committed capital.
+  const carryBase  = waterfall === "american" ? totalDeployed : lpCapital;
+  const fundProfit = Math.max(0, grossProceeds - carryBase);
   const gpCarry    = fundProfit * (carryRate / 100);
   const lpNetProceeds   = grossProceeds - gpCarry;
   const lpNetMoic       = lpNetProceeds / lpCapital;
@@ -97,18 +100,16 @@ function runModel(inp: Inputs): Outputs {
     if (yr <= maxYear) exits[yr] += exitPerCohort;
   }
 
-  // American waterfall: return capital first, then split profits
-  let lpCapReturned = 0;
   const rows: CashflowRow[] = [];
   const lpIrrCfs  = new Array(maxYear + 1).fill(0);
   const grsIrrCfs = new Array(maxYear + 1).fill(0);
+  let lpCapReturned = 0; // used only for European waterfall
 
   for (let t = 1; t <= maxYear; t++) {
     let fee = 0;
     if (t <= feeCommittedYears) {
       fee = feeCommitted;
     } else if (t <= fundLife) {
-      // Fee on remaining cost basis: only cohorts not yet exited
       const outstanding = Math.max(0, deployYears - Math.max(0, t - holdYears));
       fee = (investedCapital / Math.max(1, deployYears)) * outstanding * r;
     }
@@ -117,16 +118,24 @@ function runModel(inp: Inputs): Outputs {
     let lpNetDist = 0, gpCarryDist = 0;
 
     if (grossExit > 0) {
-      if (lpCapReturned < lpCapital) {
-        const remaining     = lpCapital - lpCapReturned;
-        const capReturn     = Math.min(grossExit, remaining);
-        const profit        = Math.max(0, grossExit - capReturn);
-        lpNetDist           = capReturn + profit * (1 - carryRate / 100);
-        gpCarryDist         = profit * (carryRate / 100);
-        lpCapReturned      += capReturn;
+      if (waterfall === "american") {
+        // Deal-by-deal: carry on each exit's profit above that deal's cost basis
+        const profit = Math.max(0, grossExit - lpCallPerYear);
+        gpCarryDist  = profit * (carryRate / 100);
+        lpNetDist    = grossExit - gpCarryDist;
       } else {
-        lpNetDist   = grossExit * (1 - carryRate / 100);
-        gpCarryDist = grossExit * (carryRate / 100);
+        // European whole-fund: no carry until LP recovers full committed capital
+        if (lpCapReturned < lpCapital) {
+          const remaining = lpCapital - lpCapReturned;
+          const capReturn = Math.min(grossExit, remaining);
+          const profit    = Math.max(0, grossExit - capReturn);
+          gpCarryDist     = profit * (carryRate / 100);
+          lpNetDist       = capReturn + profit * (1 - carryRate / 100);
+          lpCapReturned  += capReturn;
+        } else {
+          gpCarryDist = grossExit * (carryRate / 100);
+          lpNetDist   = grossExit * (1 - carryRate / 100);
+        }
       }
     }
 
@@ -198,7 +207,7 @@ function Slider({ label, value, min, max, step, onChange, display, sub }: {
 
 const DEFAULTS: Inputs = {
   fundSize: 90, deployYears: 3, holdYears: 5, grossMoic: 3.0,
-  mgmtFeeRate: 2.0, carryRate: 20, fundLife: 10, recycleRate: 0,
+  mgmtFeeRate: 2.0, carryRate: 20, fundLife: 10, recycleRate: 0, waterfall: "american",
 };
 
 export default function FundModelPage() {
@@ -228,12 +237,32 @@ export default function FundModelPage() {
     <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 sm:space-y-8">
 
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2.5 mb-1">
-          <Calculator className="text-blue-500" size={20} />
-          <h1 className="text-xl font-bold text-slate-900">GP Fund Model</h1>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5 mb-1">
+            <Calculator className="text-blue-500" size={20} />
+            <h1 className="text-xl font-bold text-slate-900">GP Fund Model</h1>
+          </div>
+          <p className="text-sm text-slate-500">
+            Adjust any parameter — returns update instantly.
+          </p>
         </div>
-        <p className="text-sm text-slate-500">Adjust any parameter — returns update instantly. American waterfall (return capital first, then split profits).</p>
+        {/* Waterfall toggle */}
+        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 shrink-0">
+          {(["american", "european"] as const).map(style => (
+            <button
+              key={style}
+              onClick={() => setInp(p => ({ ...p, waterfall: style }))}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors capitalize ${
+                inp.waterfall === style
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {style === "american" ? "American (deal-by-deal)" : "European (whole-fund)"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Inputs */}
