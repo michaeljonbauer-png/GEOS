@@ -208,9 +208,9 @@ export default function FundModelPage() {
   const out = useMemo(() => runModel(inp), [inp]);
 
   const scenarios = useMemo(() => [
-    { label: "Bear",  moic: inp.grossMoic * 0.65 },
+    { label: "Bear",  moic: 2.0 },
     { label: "Base",  moic: inp.grossMoic },
-    { label: "Bull",  moic: inp.grossMoic * 1.40 },
+    { label: "Bull",  moic: 4.0 },
   ].map(s => ({ ...s, o: runModel({ ...inp, grossMoic: s.moic }) })), [inp]);
 
   const SCENARIO_ROWS: { label: string; fmt: (o: Outputs, moic: number) => string }[] = [
