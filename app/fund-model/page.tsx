@@ -293,9 +293,9 @@ export default function FundModelPage() {
           <Card label="GP Total Economics" value={fm(out.gpTotalEconomics)} sub={`carry + ${fm(out.totalMgmtFees)} fees`} color="amber" />
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card label="LP Net Proceeds" value={fm(out.lpNetProceeds)} sub={`profit: ${fm(out.lpNetProceeds - inp.fundSize)}`} color="emerald" />
           <Card label="LP Net MOIC" value={mx(out.lpNetMoic)} sub="after fees & carry" color="emerald" />
           <Card label="LP Net IRR" value={pct(out.lpNetIrr)} sub="after fees & carry" color="emerald" />
-          <Card label="LP Net Proceeds" value={fm(out.lpNetProceeds)} sub={`profit: ${fm(out.lpNetProceeds - inp.fundSize)}`} color="emerald" />
           <Card label="GP Carry" value={fm(out.gpCarry)} sub={`${inp.carryRate}% × ${fm(out.fundProfit)} profit`} color="amber" />
         </div>
       </div>
