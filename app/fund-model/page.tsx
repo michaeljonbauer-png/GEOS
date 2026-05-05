@@ -6,13 +6,14 @@ import { Calculator } from "lucide-react";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Inputs {
-  fundSize: number;     // $M
-  deployYears: number;  // 2 | 3 | 4
-  holdYears: number;    // years avg hold per investment
-  grossMoic: number;    // gross MOIC on invested capital
-  mgmtFeeRate: number;  // % per year on committed capital
-  carryRate: number;    // % of profits
-  fundLife: number;     // years
+  fundSize: number;
+  deployYears: number;
+  holdYears: number;
+  grossMoic: number;
+  mgmtFeeRate: number;
+  carryRate: number;
+  fundLife: number;
+  recycleRate: number; // % of invested capital recycled back into new deals
 }
 
 interface CashflowRow {
@@ -25,7 +26,7 @@ interface CashflowRow {
 
 interface Outputs {
   feeCommitted: number; feeDeployed: number; feeCommittedYears: number; feeDeployedYears: number;
-  totalMgmtFees: number; investedCapital: number;
+  totalMgmtFees: number; investedCapital: number; recycledCapital: number; totalDeployed: number;
   grossProceeds: number; grossMoicOnFund: number; grossIrr: number | null;
   fundProfit: number; gpCarry: number; gpTotalEconomics: number;
   lpNetProceeds: number; lpNetMoic: number; lpNetIrr: number | null;
@@ -54,7 +55,7 @@ function calcIrr(cfs: number[]): number | null {
 }
 
 function runModel(inp: Inputs): Outputs {
-  const { fundSize, deployYears, holdYears, grossMoic, mgmtFeeRate, carryRate, fundLife } = inp;
+  const { fundSize, deployYears, holdYears, grossMoic, mgmtFeeRate, carryRate, fundLife, recycleRate } = inp;
   const r = mgmtFeeRate / 100;
 
   // Two-phase fees: years 1–5 on committed capital, remainder on deployed capital.
@@ -65,8 +66,14 @@ function runModel(inp: Inputs): Outputs {
   const feeCommitted      = fundSize * r;
   const feeDeployed       = investedCapital * r;
   const totalMgmtFees     = feeCommittedYears * feeCommitted + feeDeployedYears * feeDeployed;
-  const capPerYear        = investedCapital / deployYears;
-  const grossProceeds  = investedCapital * grossMoic;
+
+  // Recycling: proceeds from early exits reinvested without additional LP calls
+  const recycledCapital = investedCapital * (recycleRate / 100);
+  const totalDeployed   = investedCapital + recycledCapital;
+
+  const lpCallPerYear  = investedCapital / deployYears;   // LP only funds investedCapital
+  const exitPerCohort  = (totalDeployed / deployYears) * grossMoic; // exits reflect full deployed
+  const grossProceeds  = totalDeployed * grossMoic;
 
   const lpCapital  = fundSize;
   const fundProfit = Math.max(0, grossProceeds - lpCapital);
@@ -79,10 +86,10 @@ function runModel(inp: Inputs): Outputs {
   const inv: number[] = new Array(maxYear + 1).fill(0);
   const exits: number[] = new Array(maxYear + 1).fill(0);
 
-  for (let t = 1; t <= deployYears; t++) inv[t] = capPerYear;
+  for (let t = 1; t <= deployYears; t++) inv[t] = lpCallPerYear;
   for (let t = 1; t <= deployYears; t++) {
     const yr = t + holdYears;
-    if (yr <= maxYear) exits[yr] += capPerYear * grossMoic;
+    if (yr <= maxYear) exits[yr] += exitPerCohort;
   }
 
   // American waterfall: return capital first, then split profits
@@ -119,7 +126,7 @@ function runModel(inp: Inputs): Outputs {
 
   return {
     feeCommitted, feeDeployed, feeCommittedYears, feeDeployedYears,
-    totalMgmtFees, investedCapital,
+    totalMgmtFees, investedCapital, recycledCapital, totalDeployed,
     grossProceeds, grossMoicOnFund: grossProceeds / fundSize,
     grossIrr: calcIrr(grsIrrCfs),
     fundProfit, gpCarry, gpTotalEconomics,
@@ -157,9 +164,9 @@ function Card({ label, value, sub, color }: { label: string; value: string; sub:
   );
 }
 
-function Slider({ label, value, min, max, step, onChange, display }: {
+function Slider({ label, value, min, max, step, onChange, display, sub }: {
   label: string; value: number; min: number; max: number; step: number;
-  onChange: (v: number) => void; display: string;
+  onChange: (v: number) => void; display: string; sub?: string;
 }) {
   return (
     <div className="space-y-2">
@@ -170,6 +177,7 @@ function Slider({ label, value, min, max, step, onChange, display }: {
       <input type="range" min={min} max={max} step={step} value={value}
         onChange={e => onChange(Number(e.target.value))}
         className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600" />
+      {sub && <p className="text-[10px] text-slate-400">{sub}</p>}
     </div>
   );
 }
@@ -178,7 +186,7 @@ function Slider({ label, value, min, max, step, onChange, display }: {
 
 const DEFAULTS: Inputs = {
   fundSize: 90, deployYears: 3, holdYears: 4, grossMoic: 3.0,
-  mgmtFeeRate: 2.0, carryRate: 20, fundLife: 10,
+  mgmtFeeRate: 2.0, carryRate: 20, fundLife: 10, recycleRate: 0,
 };
 
 export default function FundModelPage() {
@@ -242,11 +250,18 @@ export default function FundModelPage() {
           <Slider label="Avg Hold Period" value={inp.holdYears} min={2} max={8} step={1}
             onChange={set("holdYears")} display={`${inp.holdYears} yrs`} />
 
-          <Slider label="Gross MOIC Target" value={inp.grossMoic} min={1.0} max={6.0} step={0.1}
-            onChange={set("grossMoic")} display={mx(inp.grossMoic)} />
+          <Slider label="Gross MOIC (per Investment)" value={inp.grossMoic} min={1.0} max={6.0} step={0.1}
+            onChange={set("grossMoic")} display={mx(inp.grossMoic)}
+            sub="target MOIC at the individual portfolio company level, not fund level" />
 
           <Slider label="Management Fee" value={inp.mgmtFeeRate} min={0.5} max={3.0} step={0.25}
-            onChange={set("mgmtFeeRate")} display={`${inp.mgmtFeeRate.toFixed(2)}%/yr`} />
+            onChange={set("mgmtFeeRate")} display={`${inp.mgmtFeeRate.toFixed(2)}%/yr`}
+            sub={`Yrs 1–5 on committed · Yrs 6–${inp.fundLife} on deployed only`} />
+
+          <Slider label="Recycling" value={inp.recycleRate} min={0} max={25} step={5}
+            onChange={set("recycleRate")}
+            display={inp.recycleRate === 0 ? "None" : `${inp.recycleRate}%`}
+            sub={inp.recycleRate > 0 ? `+$${out.recycledCapital.toFixed(1)}M recycled → $${out.totalDeployed.toFixed(1)}M total deployed` : "No proceeds recycled back into new investments"} />
 
           <div className="grid grid-cols-2 gap-4">
             <Slider label="Carry" value={inp.carryRate} min={10} max={30} step={5}
@@ -262,7 +277,7 @@ export default function FundModelPage() {
         <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Returns — Base Case</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
           <Card label="Gross MOIC" value={mx(inp.grossMoic)} sub="on invested capital" color="blue" />
-          <Card label="Gross MOIC on Fund" value={mx(out.grossMoicOnFund)} sub="on $90M committed" color="blue" />
+          <Card label="Gross MOIC on Fund" value={mx(out.grossMoicOnFund)} sub={`on $${inp.fundSize}M committed`} color="blue" />
           <Card label="Gross IRR" value={pct(out.grossIrr)} sub="before fees & carry" color="blue" />
           <Card label="LP Net MOIC" value={mx(out.lpNetMoic)} sub="after fees & carry" color="emerald" />
         </div>
