@@ -82,9 +82,9 @@ function runModel(inp: Inputs): Outputs {
   const grossProceeds  = totalDeployed * grossMoic;
 
   const lpCapital  = fundSize;
-  // American: profit above deployed cost basis. European: profit above full committed capital.
-  const carryBase  = waterfall === "american" ? totalDeployed : lpCapital;
-  const fundProfit = Math.max(0, grossProceeds - carryBase);
+  // Total carry is the same under both waterfall styles — the difference is only timing.
+  // Carry base = total deployed capital (what was actually put to work in deals).
+  const fundProfit = Math.max(0, grossProceeds - totalDeployed);
   const gpCarry    = fundProfit * (carryRate / 100);
   const lpNetProceeds   = grossProceeds - gpCarry;
   const lpNetMoic       = lpNetProceeds / lpCapital;
@@ -103,7 +103,7 @@ function runModel(inp: Inputs): Outputs {
   const rows: CashflowRow[] = [];
   const lpIrrCfs  = new Array(maxYear + 1).fill(0);
   const grsIrrCfs = new Array(maxYear + 1).fill(0);
-  let lpCapReturned = 0; // used only for European waterfall
+  let lpCapReturned = 0; // tracks LP capital returned, used for European waterfall threshold
 
   for (let t = 1; t <= maxYear; t++) {
     let fee = 0;
@@ -124,9 +124,9 @@ function runModel(inp: Inputs): Outputs {
         gpCarryDist  = profit * (carryRate / 100);
         lpNetDist    = grossExit - gpCarryDist;
       } else {
-        // European whole-fund: no carry until LP recovers full committed capital
-        if (lpCapReturned < lpCapital) {
-          const remaining = lpCapital - lpCapReturned;
+        // European whole-fund: no carry until LP recovers all invested capital
+        if (lpCapReturned < investedCapital) {
+          const remaining = investedCapital - lpCapReturned;
           const capReturn = Math.min(grossExit, remaining);
           const profit    = Math.max(0, grossExit - capReturn);
           gpCarryDist     = profit * (carryRate / 100);
@@ -237,32 +237,12 @@ export default function FundModelPage() {
     <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 sm:space-y-8">
 
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <Calculator className="text-blue-500" size={20} />
-            <h1 className="text-xl font-bold text-slate-900">GP Fund Model</h1>
-          </div>
-          <p className="text-sm text-slate-500">
-            Adjust any parameter — returns update instantly.
-          </p>
+      <div>
+        <div className="flex items-center gap-2.5 mb-1">
+          <Calculator className="text-blue-500" size={20} />
+          <h1 className="text-xl font-bold text-slate-900">GP Fund Model</h1>
         </div>
-        {/* Waterfall toggle */}
-        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 shrink-0">
-          {(["american", "european"] as const).map(style => (
-            <button
-              key={style}
-              onClick={() => setInp(p => ({ ...p, waterfall: style }))}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors capitalize ${
-                inp.waterfall === style
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {style === "american" ? "American (deal-by-deal)" : "European (whole-fund)"}
-            </button>
-          ))}
-        </div>
+        <p className="text-sm text-slate-500">Adjust any parameter — returns update instantly. Total GP carry is identical between waterfall styles; only the timing differs.</p>
       </div>
 
       {/* Inputs */}
@@ -309,6 +289,31 @@ export default function FundModelPage() {
 
           <Slider label="Fund Life" value={inp.fundLife} min={7} max={15} step={1}
             onChange={set("fundLife")} display={`${inp.fundLife} yrs`} />
+
+          {/* Waterfall style — spans full width */}
+          <div className="col-span-full pt-1 border-t border-slate-100">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Waterfall Style</p>
+            <div className="flex gap-2">
+              {(["american", "european"] as const).map(style => (
+                <button
+                  key={style}
+                  onClick={() => setInp(p => ({ ...p, waterfall: style }))}
+                  className={`px-4 py-2 text-xs font-semibold rounded-lg border transition-colors ${
+                    inp.waterfall === style
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600"
+                  }`}
+                >
+                  {style === "american" ? "American — deal-by-deal carry" : "European — whole-fund carry"}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1.5">
+              {inp.waterfall === "american"
+                ? "Carry paid per exit as each deal clears its cost basis. GP economics arrive earlier."
+                : "Carry withheld until LP recovers all invested capital. Same total carry, later timing."}
+            </p>
+          </div>
         </div>
       </div>
 
