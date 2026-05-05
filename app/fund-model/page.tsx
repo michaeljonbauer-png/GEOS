@@ -239,7 +239,7 @@ export default function FundModelPage() {
       {/* Inputs */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
         <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-5">Parameters</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-5">
 
           {/* Fund size */}
           <div className="space-y-2">
@@ -252,7 +252,7 @@ export default function FundModelPage() {
               className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600" />
             <div className="flex justify-between text-[10px] text-slate-400">
               <span>Investable: <strong className="text-slate-600">${out.investedCapital.toFixed(1)}M</strong></span>
-              <span>Total fees: <strong className="text-slate-600">${out.totalMgmtFees.toFixed(1)}M</strong></span>
+              <span>Fees: <strong className="text-slate-600">${out.totalMgmtFees.toFixed(1)}M</strong></span>
             </div>
           </div>
 
@@ -275,12 +275,11 @@ export default function FundModelPage() {
             display={inp.recycleRate === 0 ? "None" : `${inp.recycleRate}%`}
             sub={inp.recycleRate > 0 ? `+$${out.recycledCapital.toFixed(1)}M recycled → $${out.totalDeployed.toFixed(1)}M total deployed` : "No proceeds recycled back into new investments"} />
 
-          <div className="grid grid-cols-2 gap-4">
-            <Slider label="Carry" value={inp.carryRate} min={10} max={30} step={5}
-              onChange={set("carryRate")} display={`${inp.carryRate}%`} />
-            <Slider label="Fund Life" value={inp.fundLife} min={7} max={15} step={1}
-              onChange={set("fundLife")} display={`${inp.fundLife} yrs`} />
-          </div>
+          <Slider label="Carry" value={inp.carryRate} min={10} max={30} step={5}
+            onChange={set("carryRate")} display={`${inp.carryRate}%`} />
+
+          <Slider label="Fund Life" value={inp.fundLife} min={7} max={15} step={1}
+            onChange={set("fundLife")} display={`${inp.fundLife} yrs`} />
         </div>
       </div>
 
@@ -291,13 +290,13 @@ export default function FundModelPage() {
           <Card label="Gross MOIC" value={mx(inp.grossMoic)} sub="on invested capital" color="blue" />
           <Card label="Gross MOIC on Fund" value={mx(out.grossMoicOnFund)} sub={`on $${inp.fundSize}M committed`} color="blue" />
           <Card label="Gross IRR" value={pct(out.grossIrr)} sub="before fees & carry" color="blue" />
-          <Card label="LP Net MOIC" value={mx(out.lpNetMoic)} sub="after fees & carry" color="emerald" />
+          <Card label="GP Total Economics" value={fm(out.gpTotalEconomics)} sub={`carry + ${fm(out.totalMgmtFees)} fees`} color="amber" />
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card label="LP Net MOIC" value={mx(out.lpNetMoic)} sub="after fees & carry" color="emerald" />
           <Card label="LP Net IRR" value={pct(out.lpNetIrr)} sub="after fees & carry" color="emerald" />
           <Card label="LP Net Proceeds" value={fm(out.lpNetProceeds)} sub={`profit: ${fm(out.lpNetProceeds - inp.fundSize)}`} color="emerald" />
           <Card label="GP Carry" value={fm(out.gpCarry)} sub={`${inp.carryRate}% × ${fm(out.fundProfit)} profit`} color="amber" />
-          <Card label="GP Total Economics" value={fm(out.gpTotalEconomics)} sub={`carry + ${fm(out.totalMgmtFees)} fees`} color="amber" />
         </div>
       </div>
 
