@@ -25,7 +25,7 @@ interface CashflowRow {
 }
 
 interface Outputs {
-  feeCommitted: number; feeDeployed: number; feeCommittedYears: number; feeDeployedYears: number;
+  feeCommitted: number; feeCommittedYears: number; feeDeployedYears: number;
   totalMgmtFees: number; investedCapital: number; recycledCapital: number; totalDeployed: number;
   grossProceeds: number; grossMoicOnFund: number; grossIrr: number | null;
   fundProfit: number; gpCarry: number; gpTotalEconomics: number;
@@ -58,14 +58,19 @@ function runModel(inp: Inputs): Outputs {
   const { fundSize, deployYears, holdYears, grossMoic, mgmtFeeRate, carryRate, fundLife, recycleRate } = inp;
   const r = mgmtFeeRate / 100;
 
-  // Two-phase fees: years 1–5 on committed capital, remainder on deployed capital.
-  // Closed-form: investedCapital*(1 + p2*r) = fundSize*(1 - p1*r)
+  // Two-phase fees: years 1–5 on committed capital; years 6+ on remaining cost basis only,
+  // dropping to $0 once all investments have exited.
+  // cohortYearSum = total outstanding cohort-years in the deployed-fee window, used for closed-form.
   const feeCommittedYears = Math.min(5, fundLife);
   const feeDeployedYears  = Math.max(0, fundLife - feeCommittedYears);
-  const investedCapital   = fundSize * (1 - feeCommittedYears * r) / (1 + feeDeployedYears * r);
-  const feeCommitted      = fundSize * r;
-  const feeDeployed       = investedCapital * r;
-  const totalMgmtFees     = feeCommittedYears * feeCommitted + feeDeployedYears * feeDeployed;
+  let cohortYearSum = 0;
+  for (let t = feeCommittedYears + 1; t <= fundLife; t++) {
+    cohortYearSum += Math.max(0, deployYears - Math.max(0, t - holdYears));
+  }
+  // Closed-form: investedCapital*(1 + r*cohortYearSum/deployYears) = fundSize*(1 - feeCommittedYears*r)
+  const investedCapital = fundSize * (1 - feeCommittedYears * r) / (1 + r * cohortYearSum / Math.max(1, deployYears));
+  const feeCommitted    = fundSize * r;
+  const totalMgmtFees   = feeCommittedYears * feeCommitted + (investedCapital / Math.max(1, deployYears)) * r * cohortYearSum;
 
   // Recycling: proceeds from early exits reinvested without additional LP calls
   const recycledCapital = investedCapital * (recycleRate / 100);
@@ -99,7 +104,14 @@ function runModel(inp: Inputs): Outputs {
   const grsIrrCfs = new Array(maxYear + 1).fill(0);
 
   for (let t = 1; t <= maxYear; t++) {
-    const fee       = t <= fundLife ? (t <= feeCommittedYears ? feeCommitted : feeDeployed) : 0;
+    let fee = 0;
+    if (t <= feeCommittedYears) {
+      fee = feeCommitted;
+    } else if (t <= fundLife) {
+      // Fee on remaining cost basis: only cohorts not yet exited
+      const outstanding = Math.max(0, deployYears - Math.max(0, t - holdYears));
+      fee = (investedCapital / Math.max(1, deployYears)) * outstanding * r;
+    }
     const lpCall    = -(inv[t] + fee);
     const grossExit = exits[t];
     let lpNetDist = 0, gpCarryDist = 0;
@@ -125,7 +137,7 @@ function runModel(inp: Inputs): Outputs {
   }
 
   return {
-    feeCommitted, feeDeployed, feeCommittedYears, feeDeployedYears,
+    feeCommitted, feeCommittedYears, feeDeployedYears,
     totalMgmtFees, investedCapital, recycledCapital, totalDeployed,
     grossProceeds, grossMoicOnFund: grossProceeds / fundSize,
     grossIrr: calcIrr(grsIrrCfs),
@@ -373,9 +385,9 @@ export default function FundModelPage() {
           </table>
         </div>
         <p className="text-[11px] text-slate-400 mt-2">
-          LP calls are parenthesized. Fees: {fm(out.feeCommitted)}/yr on committed (yrs 1–{out.feeCommittedYears}),
-          then {fm(out.feeDeployed)}/yr on deployed (yrs {out.feeCommittedYears + 1}–{inp.fundLife}).
-          Exits distributed uniformly across deployment cohorts after {inp.holdYears}-yr hold.
+          LP calls are parenthesized. Fees: {fm(out.feeCommitted)}/yr on committed capital (yrs 1–{out.feeCommittedYears}),
+          then on remaining cost basis only — steps down as each cohort exits, reaching $0 once all investments are realized.
+          Total fees: {fm(out.totalMgmtFees)}. Exits distributed uniformly after {inp.holdYears}-yr hold.
         </p>
       </div>
 
