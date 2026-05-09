@@ -16,7 +16,13 @@ const TABS = [
 
 export default function SourcingPage() {
   const [tab, setTab] = useState<Tab>("leads");
-  const current = TABS.find(t => t.id === tab)!;
+  const [scoutPrefill, setScoutPrefill] = useState<string | undefined>();
+  const current = TABS.find(t => t.id === tab)!
+
+  const handleScout = (name: string) => {
+    setScoutPrefill(name);
+    setTab("scout");
+  };;
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -42,8 +48,8 @@ export default function SourcingPage() {
 
       {/* All tabs mounted simultaneously to preserve state across switches */}
       <div className={tab !== "leads" ? "hidden" : ""}><LeadsTab /></div>
-      <div className={tab !== "hunt" ? "hidden" : ""}><HuntTab /></div>
-      <div className={tab !== "scout" ? "hidden" : ""}><ScoutTab /></div>
+      <div className={tab !== "hunt" ? "hidden" : ""}><HuntTab onScout={handleScout} /></div>
+      <div className={tab !== "scout" ? "hidden" : ""}><ScoutTab prefill={scoutPrefill} /></div>
     </div>
   );
 }

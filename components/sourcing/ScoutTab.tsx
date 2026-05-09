@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AlertCircle, ExternalLink, ThumbsDown, Building2, RotateCcw, Target, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -69,9 +69,13 @@ function ScoutCard({ result, onAdd, onDismiss, adding, dismissed }: {
   );
 }
 
-export function ScoutTab() {
+export function ScoutTab({ prefill }: { prefill?: string }) {
   const { toast } = useToast();
   const [input, setInput] = useState("");
+
+  useEffect(() => {
+    if (prefill) setInput(prefill);
+  }, [prefill]);
   const [results, setResults] = useState<ScoutResult[]>([]);
   const [scouting, setScouting] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number; name: string } | null>(null);
