@@ -29,6 +29,12 @@ import {
   getStatusConfig, formatARR, formatGrowth, scoreColor, scoreBg,
   COMPANY_STATUSES, SECTORS, STAGES, INTERACTION_TYPES,
 } from "@/lib/utils";
+
+const PRIORITIES = [
+  { value: "HIGH", label: "High", color: "bg-red-100 text-red-700 border-red-300" },
+  { value: "MEDIUM", label: "Medium", color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
+  { value: "LOW", label: "Low", color: "bg-slate-100 text-slate-600 border-slate-300" },
+];
 import { useToast } from "@/components/ui/use-toast";
 
 interface ScoreDetail {
@@ -285,6 +291,15 @@ export default function CompanyDetailPage() {
     load();
   };
 
+  const priorityChange = async (newPriority: string) => {
+    await fetch(`/api/companies/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ priority: newPriority }),
+    });
+    load();
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center h-full text-slate-400 text-sm">Loading...</div>
   );
@@ -417,23 +432,43 @@ export default function CompanyDetailPage() {
         ))}
       </div>
 
-      {/* Status changer */}
-      <div className="flex items-center gap-3 mb-6">
-        <span className="text-sm text-slate-500 font-medium">Status:</span>
-        <div className="flex gap-2 flex-wrap">
-          {COMPANY_STATUSES.map((s) => (
-            <button
-              key={s.value}
-              onClick={() => statusChange(s.value)}
-              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                company.status === s.value
-                  ? `${s.color} border-current font-semibold`
-                  : "border-slate-200 text-slate-500 hover:border-slate-400"
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
+      {/* Status + Priority changers */}
+      <div className="flex flex-col gap-2 mb-6">
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-500 font-medium w-16 shrink-0">Status:</span>
+          <div className="flex gap-2 flex-wrap">
+            {COMPANY_STATUSES.map((s) => (
+              <button
+                key={s.value}
+                onClick={() => statusChange(s.value)}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                  company.status === s.value
+                    ? `${s.color} border-current font-semibold`
+                    : "border-slate-200 text-slate-500 hover:border-slate-400"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-500 font-medium w-16 shrink-0">Priority:</span>
+          <div className="flex gap-2 flex-wrap">
+            {PRIORITIES.map((p) => (
+              <button
+                key={p.value}
+                onClick={() => priorityChange(p.value)}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                  company.priority === p.value
+                    ? `${p.color} font-semibold`
+                    : "border-slate-200 text-slate-500 hover:border-slate-400"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -522,6 +557,16 @@ export default function CompanyDetailPage() {
                       <Label>Description</Label>
                       <Textarea className="mt-1" rows={4} value={(editForm.description as string) ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} />
                     </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Geography</Label>
+                        <Input className="mt-1" value={(editForm.geography as string) ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, geography: e.target.value }))} />
+                      </div>
+                      <div>
+                        <Label>Source</Label>
+                        <Input className="mt-1" value={(editForm.source as string) ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, source: e.target.value }))} />
+                      </div>
+                    </div>
                     <CustomFieldsSection
                       companyId={company.id}
                       sources={sources}
@@ -540,7 +585,6 @@ export default function CompanyDetailPage() {
                         { label: "Geography", value: company.geography ?? "—", field: null },
                         { label: "Sub-sector", value: company.subSector ?? "—", field: null },
                         { label: "Source", value: company.source ?? "—", field: null },
-                        { label: "Priority", value: company.priority, field: null },
                       ].map(({ label, value, field }) => (
                         <div key={label}>
                           <dt className="text-slate-400 text-xs">{label}</dt>
