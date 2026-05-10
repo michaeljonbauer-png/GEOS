@@ -109,10 +109,13 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: result.name, website: result.website, description: result.description, sector: result.sector, subSector: result.subSector, geography: result.geography, founded: result.founded, stage: result.stage, totalFundingM: result.totalFundingM, employees: result.employees, arrEstimate: result.arrEstimate, arrGrowth: result.arrGrowth, status: "IDENTIFIED", priority: "MEDIUM", source: result.source ?? "Scout: web-verified" }),
       });
-      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Server error");
       const s = new Set(dismissed); s.add(result.name); setDismissed(s);
       toast({ title: `${result.name} added to pipeline`, description: "Now visible in Companies as Identified." });
-    } catch { toast({ title: "Failed to add company", variant: "destructive" }); }
+    } catch (err) {
+      toast({ title: "Failed to add company", description: err instanceof Error ? err.message : "Network error — company was not saved.", variant: "destructive" });
+    }
     finally { setAddingId(null); }
   };
 
