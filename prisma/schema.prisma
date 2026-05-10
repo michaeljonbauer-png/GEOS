@@ -416,3 +416,11 @@ model CompanyResearch {
   lastResearched DateTime?
   updatedAt      DateTime @updatedAt
 }
+
+model HuntSession {
+  id          String   @id @default(cuid())
+  query       String
+  results     String   // JSON: HuntResult[]
+  resultCount Int      @default(0)
+  createdAt   DateTime @default(now())
+}

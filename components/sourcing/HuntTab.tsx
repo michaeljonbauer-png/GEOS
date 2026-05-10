@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Sparkles, ThumbsDown, ExternalLink, Radar, Send, Building2, RotateCcw, ChevronDown, ChevronUp, Search } from "lucide-react";
+import {
+  Sparkles, ThumbsDown, ExternalLink, Radar, Send, Building2,
+  RotateCcw, ChevronDown, ChevronUp, Search, History, Trash2, Clock,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { ScoreBadge, MetricRow } from "./shared";
@@ -14,7 +17,9 @@ interface HuntResult {
   huntRationale: string | null; huntScore: number | null; source: string | null;
 }
 
-const STORAGE_KEY = "hunt_session";
+interface HuntSessionMeta {
+  id: string; query: string; resultCount: number; createdAt: string;
+}
 
 const EXAMPLE_QUERIES = [
   "Manufacturing software companies with 25–75 employees founded 2020–2023 that serve interesting parts of the manufacturing value chain",
@@ -24,6 +29,17 @@ const EXAMPLE_QUERIES = [
   "Supply chain visibility or logistics software for mid-market manufacturers",
   "Field service management software for trades (HVAC, plumbing, electrical), founded after 2019",
 ];
+
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffH = diffMs / (1000 * 60 * 60);
+  if (diffH < 1) return "just now";
+  if (diffH < 24) return `${Math.floor(diffH)}h ago`;
+  if (diffH < 48) return "yesterday";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
 function HuntCard({ result, onAdd, onDismiss, onScout, adding, dismissed }: {
   result: HuntResult; onAdd: () => void; onDismiss: () => void;
@@ -48,9 +64,7 @@ function HuntCard({ result, onAdd, onDismiss, onScout, adding, dismissed }: {
       </div>
       {result.description && (
         <div className="mb-3">
-          <p className={`text-xs text-slate-500 leading-relaxed ${expanded ? "" : "line-clamp-3"}`}>
-            {result.description}
-          </p>
+          <p className={`text-xs text-slate-500 leading-relaxed ${expanded ? "" : "line-clamp-3"}`}>{result.description}</p>
           {descLong && (
             <button onClick={() => setExpanded(v => !v)} className="mt-1 text-[11px] text-blue-500 hover:text-blue-700 flex items-center gap-0.5 font-medium">
               {expanded ? <><ChevronUp size={11} />Show less</> : <><ChevronDown size={11} />Show more</>}
@@ -92,40 +106,76 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
   const [loading, setLoading] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [history, setHistory] = useState<HuntSessionMeta[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [activeSessionDate, setActiveSessionDate] = useState<string | null>(null);
 
-  // Restore last session on mount
-  useEffect(() => {
+  const fetchHistory = async () => {
     try {
-      const saved = sessionStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const { query: q, results: r, lastQuery: lq, dismissed: d } = JSON.parse(saved);
-        if (q) setQuery(q);
-        if (r?.length) setResults(r);
-        if (lq) setLastQuery(lq);
-        if (d?.length) setDismissed(new Set(d));
+      const res = await fetch("/api/hunt");
+      const data = await res.json();
+      setHistory(data.sessions ?? []);
+      return data.sessions as HuntSessionMeta[];
+    } catch {
+      return [];
+    }
+  };
+
+  // On mount: load history and auto-restore the most recent session
+  useEffect(() => {
+    fetchHistory().then(sessions => {
+      if (sessions.length > 0) {
+        loadSession(sessions[0]);
       }
-    } catch {}
+    }).finally(() => setHistoryLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist session on change
-  useEffect(() => {
+  const loadSession = async (session: HuntSessionMeta) => {
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
-        query, results, lastQuery, dismissed: Array.from(dismissed),
-      }));
-    } catch {}
-  }, [query, results, lastQuery, dismissed]);
+      const res = await fetch(`/api/hunt/${session.id}`);
+      const data = await res.json();
+      setQuery(session.query);
+      setResults(data.results ?? []);
+      setLastQuery(session.query);
+      setDismissed(new Set());
+      setActiveSessionDate(session.createdAt);
+    } catch {
+      toast({ title: "Failed to load session", variant: "destructive" });
+    }
+  };
+
+  const deleteSession = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await fetch(`/api/hunt/${id}`, { method: "DELETE" });
+      const updated = history.filter(s => s.id !== id);
+      setHistory(updated);
+      // If we just deleted the active session, clear results
+      if (results.length > 0 && lastQuery === history.find(s => s.id === id)?.query) {
+        setResults([]); setQuery(""); setLastQuery(""); setActiveSessionDate(null);
+      }
+    } catch {
+      toast({ title: "Failed to delete", variant: "destructive" });
+    }
+  };
 
   const hunt = async (q = query) => {
     if (!q.trim() || loading) return;
-    setLoading(true); setResults([]); setDismissed(new Set());
+    setLoading(true); setResults([]); setDismissed(new Set()); setActiveSessionDate(null);
     try {
-      const res = await fetch("/api/hunt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q.trim(), count: 6 }) });
+      const res = await fetch("/api/hunt", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q.trim(), count: 6 }),
+      });
       const data = await res.json() as { results?: HuntResult[]; error?: string; query?: string };
       if (!res.ok) { toast({ title: "Hunt failed", description: data.error ?? "Unknown error", variant: "destructive" }); return; }
       setResults(data.results ?? []);
       setLastQuery(data.query ?? q.trim());
+      setActiveSessionDate(new Date().toISOString());
       if ((data.results ?? []).length === 0) toast({ title: "No results", description: "Try rephrasing or broadening the criteria." });
+      // Refresh history list to include this new session
+      fetchHistory();
     } catch (err) {
       toast({ title: "Hunt failed", description: err instanceof Error ? err.message : "Network error", variant: "destructive" });
     } finally { setLoading(false); }
@@ -144,19 +194,21 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
       toast({ title: `${result.name} added to pipeline`, description: "Now visible in Companies as Identified." });
     } catch (err) {
       toast({ title: "Failed to add company", description: err instanceof Error ? err.message : "Network error — company was not saved.", variant: "destructive" });
-    }
-    finally { setAddingId(null); }
+    } finally { setAddingId(null); }
   };
 
-  const clearSession = () => {
-    setResults([]); setQuery(""); setLastQuery(""); setDismissed(new Set());
-    try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+  const clearResults = () => {
+    setResults([]); setQuery(""); setLastQuery(""); setDismissed(new Set()); setActiveSessionDate(null);
   };
 
   const useExample = (ex: string) => { setQuery(ex); setTimeout(() => hunt(ex), 0); };
 
+  const hasResults = results.length > 0;
+  const visibleCount = results.filter(r => !dismissed.has(r.name)).length;
+
   return (
     <div>
+      {/* Search box */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm">
         <textarea
           className="w-full text-sm text-slate-800 placeholder:text-slate-400 resize-none outline-none leading-relaxed"
@@ -174,19 +226,7 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
         </div>
       </div>
 
-      {results.length === 0 && !loading && (
-        <div className="mb-8">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Example queries</p>
-          <div className="flex flex-col gap-2">
-            {EXAMPLE_QUERIES.map((ex, i) => (
-              <button key={i} onClick={() => useExample(ex)} className="text-left text-sm text-slate-600 bg-white border border-slate-200 rounded-lg px-4 py-2.5 hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-colors">
-                <Sparkles size={11} className="inline mr-1.5 text-blue-400" />{ex}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
+      {/* Loading skeleton */}
       {loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -200,14 +240,18 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
         </div>
       )}
 
-      {results.length > 0 && !loading && (
+      {/* Results */}
+      {hasResults && !loading && (
         <>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-sm font-medium text-slate-700">{results.filter(r => !dismissed.has(r.name)).length} results</p>
-              <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">"{lastQuery}"</p>
+              <p className="text-sm font-medium text-slate-700">{visibleCount} result{visibleCount !== 1 ? "s" : ""}</p>
+              <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                {activeSessionDate && <><Clock size={10} />{formatDate(activeSessionDate)} · </>}
+                <span className="line-clamp-1">"{lastQuery}"</span>
+              </p>
             </div>
-            <Button variant="outline" size="sm" onClick={clearSession} className="text-slate-500">
+            <Button variant="outline" size="sm" onClick={clearResults} className="text-slate-500">
               <RotateCcw size={13} className="mr-1.5" />New search
             </Button>
           </div>
@@ -227,10 +271,65 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
           {results.every(r => dismissed.has(r.name)) && (
             <div className="text-center py-16 text-slate-400 text-sm">
               All results dismissed.{" "}
-              <button className="text-blue-600 hover:underline" onClick={clearSession}>Start a new search</button>
+              <button className="text-blue-600 hover:underline" onClick={clearResults}>Start a new search</button>
             </div>
           )}
         </>
+      )}
+
+      {/* Empty state: history + examples */}
+      {!hasResults && !loading && (
+        <div>
+          {/* Past searches */}
+          {(historyLoading || history.length > 0) && (
+            <div className="mb-8">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <History size={11} />Past searches
+              </p>
+              {historyLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map(i => <div key={i} className="h-12 bg-slate-100 rounded-lg animate-pulse" />)}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {history.map(session => (
+                    <button
+                      key={session.id}
+                      onClick={() => loadSession(session)}
+                      className="group flex items-center gap-3 text-left bg-white border border-slate-200 rounded-lg px-4 py-3 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-slate-700 truncate group-hover:text-blue-800">{session.query}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{session.resultCount} compan{session.resultCount === 1 ? "y" : "ies"} · {formatDate(session.createdAt)}</p>
+                      </div>
+                      <span
+                        onClick={(e) => deleteSession(session.id, e)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all rounded"
+                        title="Delete"
+                      >
+                        <Trash2 size={13} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Example queries */}
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+              <Sparkles size={11} />Example queries
+            </p>
+            <div className="flex flex-col gap-2">
+              {EXAMPLE_QUERIES.map((ex, i) => (
+                <button key={i} onClick={() => useExample(ex)} className="text-left text-sm text-slate-600 bg-white border border-slate-200 rounded-lg px-4 py-2.5 hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-colors">
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

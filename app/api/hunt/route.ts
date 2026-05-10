@@ -5,6 +5,15 @@ import Anthropic from "@anthropic-ai/sdk";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
+export async function GET() {
+  const sessions = await db.huntSession.findMany({
+    select: { id: true, query: true, resultCount: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+  return NextResponse.json({ sessions });
+}
+
 function isRateLimitError(err: unknown) {
   const status = (err as { status?: number }).status;
   const msg = err instanceof Error ? err.message : String(err);
@@ -139,6 +148,11 @@ Return ONLY a JSON array:
         }
         return r;
       });
+
+    // Persist the session so history survives navigation and redeployments
+    await db.huntSession.create({
+      data: { query: query.trim(), results: JSON.stringify(results), resultCount: results.length },
+    });
 
     return NextResponse.json({ results, query: query.trim() });
 
