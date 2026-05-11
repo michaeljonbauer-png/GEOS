@@ -652,10 +652,12 @@ export default function CompanyDetailPage() {
               </CardContent>
             </Card>
 
-            {company.scoreBreakdown && (() => {
+            {(company.scoreBreakdown || company.recommendationRationale) && (() => {
               let criteria: { criterion: string; met: boolean; score: number; note: string }[] = [];
-              try { criteria = JSON.parse(company.scoreBreakdown!); } catch { /* ignore */ }
-              return criteria.length > 0 ? (
+              if (company.scoreBreakdown) {
+                try { criteria = JSON.parse(company.scoreBreakdown); } catch { /* ignore */ }
+              }
+              return (
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
@@ -675,30 +677,32 @@ export default function CompanyDetailPage() {
                         <p className="text-xs text-violet-900 leading-relaxed">{company.recommendationRationale}</p>
                       </div>
                     )}
-                    <div className="space-y-2">
-                      {criteria.map((c, i) => (
-                        <div key={i} className="flex items-start gap-2">
-                          {c.met
-                            ? <CheckCircle2 size={13} className="text-emerald-500 shrink-0 mt-0.5" />
-                            : <XCircle size={13} className="text-slate-300 shrink-0 mt-0.5" />}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-medium text-slate-700 truncate">{c.criterion}</span>
-                              <span className={`text-xs font-bold tabular-nums shrink-0 ${c.score >= 70 ? "text-emerald-600" : c.score >= 40 ? "text-amber-600" : "text-red-400"}`}>
-                                {c.score}/100
-                              </span>
+                    {criteria.length > 0 && (
+                      <div className="space-y-2">
+                        {criteria.map((c, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            {c.met
+                              ? <CheckCircle2 size={13} className="text-emerald-500 shrink-0 mt-0.5" />
+                              : <XCircle size={13} className="text-slate-300 shrink-0 mt-0.5" />}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-medium text-slate-700 truncate">{c.criterion}</span>
+                                <span className={`text-xs font-bold tabular-nums shrink-0 ${c.score >= 70 ? "text-emerald-600" : c.score >= 40 ? "text-amber-600" : "text-red-400"}`}>
+                                  {c.score}/100
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 leading-snug mt-0.5">{c.note}</p>
                             </div>
-                            <p className="text-[11px] text-slate-400 leading-snug mt-0.5">{c.note}</p>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-100">
-                      AI estimate at time of lead generation · data may have changed · use Refresh to update
+                      AI estimate at time of sourcing · data may have changed · use Refresh to update
                     </p>
                   </CardContent>
                 </Card>
-              ) : null;
+              );
             })()}
 
             <Card>

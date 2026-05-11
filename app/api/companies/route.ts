@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       name, website, description, sector, subSector, geography,
       arrEstimate, arrGrowth, nrrEstimate, grossMargin, employees,
       founded, stage, status, priority, source, linkedinUrl, crunchbaseUrl,
-      totalFundingM,
+      totalFundingM, recommendationScore, recommendationRationale,
     } = body;
 
     if (!name) {
@@ -70,6 +70,8 @@ export async function POST(request: NextRequest) {
         stage, status: status ?? "IDENTIFIED",
         priority: priority ?? "MEDIUM",
         source, linkedinUrl, crunchbaseUrl,
+        recommendationScore: recommendationScore != null ? Number(recommendationScore) : null,
+        recommendationRationale: recommendationRationale ?? null,
       },
     });
 
