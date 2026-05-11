@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import {
   ArrowLeft, ExternalLink, Linkedin, Mail, Phone, Calendar,
   Plus, Pencil, Trash2, Save, X, Send, StickyNote, Star,
-  Search,
+  Search, Sparkles, CheckCircle2, XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,6 +100,9 @@ interface Company {
   isIndependent: boolean | null;
   hasNoTier1VC: boolean | null;
   founderMajority: boolean | null;
+  scoreBreakdown: string | null;
+  recommendationRationale: string | null;
+  recommendationScore: number | null;
   contacts: Contact[];
   interactions: Interaction[];
   scoreDetails: ScoreDetail[];
@@ -648,6 +651,55 @@ export default function CompanyDetailPage() {
                 <ThesisFitPanel companyId={company.id} />
               </CardContent>
             </Card>
+
+            {company.scoreBreakdown && (() => {
+              let criteria: { criterion: string; met: boolean; score: number; note: string }[] = [];
+              try { criteria = JSON.parse(company.scoreBreakdown!); } catch { /* ignore */ }
+              return criteria.length > 0 ? (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Sparkles size={14} className="text-violet-500" />
+                      AI Recommendation Analysis
+                      {company.recommendationScore != null && (
+                        <span className={`ml-auto text-sm font-bold ${company.recommendationScore >= 75 ? "text-emerald-600" : company.recommendationScore >= 50 ? "text-amber-600" : "text-slate-400"}`}>
+                          {company.recommendationScore}/100
+                        </span>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {company.recommendationRationale && (
+                      <div className="bg-violet-50 border border-violet-100 rounded-lg px-3 py-2.5">
+                        <p className="text-[10px] font-semibold text-violet-500 uppercase tracking-widest mb-1">Why it fits</p>
+                        <p className="text-xs text-violet-900 leading-relaxed">{company.recommendationRationale}</p>
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      {criteria.map((c, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          {c.met
+                            ? <CheckCircle2 size={13} className="text-emerald-500 shrink-0 mt-0.5" />
+                            : <XCircle size={13} className="text-slate-300 shrink-0 mt-0.5" />}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-medium text-slate-700 truncate">{c.criterion}</span>
+                              <span className={`text-xs font-bold tabular-nums shrink-0 ${c.score >= 70 ? "text-emerald-600" : c.score >= 40 ? "text-amber-600" : "text-red-400"}`}>
+                                {c.score}/100
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 leading-snug mt-0.5">{c.note}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-100">
+                      AI estimate at time of lead generation · data may have changed · use Refresh to update
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : null;
+            })()}
 
             <Card>
               <CardHeader><CardTitle className="text-base">Investment Score</CardTitle></CardHeader>

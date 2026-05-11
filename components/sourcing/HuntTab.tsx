@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Sparkles, ThumbsDown, ExternalLink, Radar, Send, Building2,
-  RotateCcw, ChevronDown, ChevronUp, Search, History, Trash2, Clock,
+  RotateCcw, ChevronDown, ChevronUp, Search, History, Trash2, Clock, ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -41,11 +42,26 @@ function formatDate(iso: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function HuntCard({ result, onAdd, onDismiss, onScout, adding, dismissed }: {
+function HuntCard({ result, onAdd, onDismiss, onScout, adding, dismissed, addedId }: {
   result: HuntResult; onAdd: () => void; onDismiss: () => void;
-  onScout: () => void; adding: boolean; dismissed: boolean;
+  onScout: () => void; adding: boolean; dismissed: boolean; addedId: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
+  if (addedId) {
+    return (
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-emerald-800 truncate">{result.name}</p>
+          <p className="text-xs text-emerald-600 mt-0.5">Added to pipeline</p>
+        </div>
+        <Link href={`/companies/${addedId}`}>
+          <Button size="sm" variant="outline" className="shrink-0 text-emerald-700 border-emerald-300 hover:bg-emerald-100 text-xs gap-1">
+            View details <ArrowRight size={11} />
+          </Button>
+        </Link>
+      </div>
+    );
+  }
   if (dismissed) return null;
   const descLong = (result.description ?? "").length > 180;
 
@@ -106,6 +122,7 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
   const [loading, setLoading] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [addedCompanies, setAddedCompanies] = useState<Map<string, string>>(new Map());
   const [history, setHistory] = useState<HuntSessionMeta[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [activeSessionDate, setActiveSessionDate] = useState<string | null>(null);
@@ -162,7 +179,7 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
 
   const hunt = async (q = query) => {
     if (!q.trim() || loading) return;
-    setLoading(true); setResults([]); setDismissed(new Set()); setActiveSessionDate(null);
+    setLoading(true); setResults([]); setDismissed(new Set()); setAddedCompanies(new Map()); setActiveSessionDate(null);
     try {
       const res = await fetch("/api/hunt", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -191,14 +208,15 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Server error");
       const s = new Set(dismissed); s.add(result.name); setDismissed(s);
-      toast({ title: `${result.name} added to pipeline`, description: "Now visible in Companies as Identified." });
+      const m = new Map(addedCompanies); m.set(result.name, data.id); setAddedCompanies(m);
+      toast({ title: `${result.name} added to pipeline` });
     } catch (err) {
       toast({ title: "Failed to add company", description: err instanceof Error ? err.message : "Network error — company was not saved.", variant: "destructive" });
     } finally { setAddingId(null); }
   };
 
   const clearResults = () => {
-    setResults([]); setQuery(""); setLastQuery(""); setDismissed(new Set()); setActiveSessionDate(null);
+    setResults([]); setQuery(""); setLastQuery(""); setDismissed(new Set()); setAddedCompanies(new Map()); setActiveSessionDate(null);
   };
 
   const useExample = (ex: string) => { setQuery(ex); setTimeout(() => hunt(ex), 0); };
@@ -265,6 +283,7 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
                 onScout={() => onScout?.(result.name)}
                 adding={addingId === result.name}
                 dismissed={dismissed.has(result.name)}
+                addedId={addedCompanies.get(result.name) ?? null}
               />
             ))}
           </div>

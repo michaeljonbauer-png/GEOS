@@ -77,13 +77,24 @@ export async function POST() {
     }
 
     // ── Context ──────────────────────────────────────────────────────────────
-    const [thesisCriteria, existingCompanies, recentFeedback] = await Promise.all([
+    const [thesisCriteria, existingCompanies, recentFeedback, pursuedCompanies] = await Promise.all([
       db.thesisCriterion.findMany({ where: { isActive: true }, orderBy: { order: "asc" } }),
-      db.company.findMany({ select: { name: true }, orderBy: { createdAt: "desc" }, take: 30 }),
+      db.company.findMany({ select: { name: true }, orderBy: { createdAt: "desc" }, take: 50 }),
       db.companyFeedback.findMany({
         include: { company: { select: { name: true } } },
         orderBy: { createdAt: "desc" },
         take: 20,
+      }),
+      // Pursued companies with scoring notes — these are your real signal of what you like
+      db.company.findMany({
+        where: { status: { in: ["IN_CONVERSATION", "DILIGENCE", "CLOSED_WON"] } },
+        select: {
+          name: true, sector: true, subSector: true, stage: true,
+          arrEstimate: true, arrGrowth: true, employees: true,
+          scoreDetails: { select: { score: true, notes: true, criterion: { select: { name: true } } } },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 10,
       }),
     ]);
 
@@ -100,6 +111,17 @@ export async function POST() {
       }
       return `• ${t.name} [${t.category}]: ${t.notes ?? t.description ?? "qualitative signal"}`;
     }).join("\n");
+
+    // Build a richer picture of what the investor has pursued so the model can pattern-match
+    const pursuedContext = pursuedCompanies.length > 0
+      ? pursuedCompanies.map(c => {
+          const notes = c.scoreDetails
+            .filter(sd => sd.notes)
+            .map(sd => `${sd.criterion.name}: ${sd.notes}`)
+            .join("; ");
+          return `• ${c.name} (${[c.sector, c.subSector, c.stage].filter(Boolean).join(", ")}${notes ? ` — notes: ${notes}` : ""})`;
+        }).join("\n")
+      : "";
 
     const existingNames = existingCompanies.map(c => c.name).join(", ") || "None yet";
     const interested = recentFeedback.filter(f => ["INTERESTED", "HIGH_PRIORITY"].includes(f.signal));
@@ -142,7 +164,8 @@ THESIS CRITERIA (score each company against all of these):
 ${thesisSummary}
 
 SKIP (already in pipeline): ${existingNames}
-${feedbackLine ? `FEEDBACK: ${feedbackLine}` : ""}
+${feedbackLine ? `\nINVESTOR FEEDBACK (use to calibrate): ${feedbackLine}` : ""}
+${pursuedContext ? `\nCOMPANIES INVESTOR HAS PURSUED (pattern-match on these profiles when generating new leads):\n${pursuedContext}` : ""}
 
 Generate exactly ${toGenerate} companies. Prefer vertical/industry software, B2B enterprise/mid-market, founded 2018–2023, 15–250 employees. EXCLUDE: acquired, PE-owned, public, roll-up subsidiaries.
 

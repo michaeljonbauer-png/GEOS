@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AlertCircle, ExternalLink, ThumbsDown, Building2, RotateCcw, Target, Loader2, Search } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, ExternalLink, ThumbsDown, Building2, RotateCcw, Target, Loader2, Search, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { ScoreBadge, MetricRow } from "./shared";
@@ -21,9 +22,24 @@ const EMPTY: Omit<ScoutResult, "name" | "inputName"> = {
   arrEstimate: null, arrGrowth: null, fitScore: null, fitRationale: null, source: null,
 };
 
-function ScoutCard({ result, onAdd, onDismiss, adding, dismissed }: {
-  result: ScoutResult; onAdd: () => void; onDismiss: () => void; adding: boolean; dismissed: boolean;
+function ScoutCard({ result, onAdd, onDismiss, adding, dismissed, addedId }: {
+  result: ScoutResult; onAdd: () => void; onDismiss: () => void; adding: boolean; dismissed: boolean; addedId: string | null;
 }) {
+  if (addedId) {
+    return (
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-emerald-800 truncate">{result.name}</p>
+          <p className="text-xs text-emerald-600 mt-0.5">Added to pipeline</p>
+        </div>
+        <Link href={`/companies/${addedId}`}>
+          <Button size="sm" variant="outline" className="shrink-0 text-emerald-700 border-emerald-300 hover:bg-emerald-100 text-xs gap-1">
+            View details <ArrowRight size={11} />
+          </Button>
+        </Link>
+      </div>
+    );
+  }
   if (dismissed) return null;
   if (result.error) {
     return (
@@ -81,6 +97,7 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
   const [progress, setProgress] = useState<{ current: number; total: number; name: string } | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [addedCompanies, setAddedCompanies] = useState<Map<string, string>>(new Map());
 
   const companies = input.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
 
@@ -112,7 +129,8 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Server error");
       const s = new Set(dismissed); s.add(result.name); setDismissed(s);
-      toast({ title: `${result.name} added to pipeline`, description: "Now visible in Companies as Identified." });
+      const m = new Map(addedCompanies); m.set(result.name, data.id); setAddedCompanies(m);
+      toast({ title: `${result.name} added to pipeline` });
     } catch (err) {
       toast({ title: "Failed to add company", description: err instanceof Error ? err.message : "Network error — company was not saved.", variant: "destructive" });
     }
@@ -161,7 +179,7 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {results.map((result, i) => (
-              <ScoutCard key={`${result.name}-${i}`} result={result} onAdd={() => addToPipeline(result)} onDismiss={() => { const s = new Set(dismissed); s.add(result.name); setDismissed(s); }} adding={addingId === result.name} dismissed={dismissed.has(result.name)} />
+              <ScoutCard key={`${result.name}-${i}`} result={result} onAdd={() => addToPipeline(result)} onDismiss={() => { const s = new Set(dismissed); s.add(result.name); setDismissed(s); }} adding={addingId === result.name} dismissed={dismissed.has(result.name)} addedId={addedCompanies.get(result.name) ?? null} />
             ))}
           </div>
         </>

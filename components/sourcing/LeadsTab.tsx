@@ -78,7 +78,9 @@ function LeadCard({ lead, onPursue, onPass, onRefresh, processing, refreshing }:
       )}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
-          <h3 className="font-semibold text-slate-900 truncate text-sm">{lead.name}</h3>
+          <Link href={`/companies/${lead.id}`} className="hover:text-blue-700 transition-colors">
+            <h3 className="font-semibold text-slate-900 truncate text-sm">{lead.name}</h3>
+          </Link>
           <p className="text-[11px] text-slate-400 mt-0.5">{[lead.geography, lead.stage].filter(Boolean).join(" · ")}</p>
         </div>
         <ScoreBadge score={lead.recommendationScore} />
