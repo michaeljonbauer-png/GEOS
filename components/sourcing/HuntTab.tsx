@@ -280,41 +280,43 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
       {/* Empty state: history + examples */}
       {!hasResults && !loading && (
         <div>
-          {/* Past searches */}
-          {(historyLoading || history.length > 0) && (
-            <div className="mb-8">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                <History size={11} />Past searches
+          {/* Past searches — always shown (loading skeleton or results or empty notice) */}
+          <div className="mb-8">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+              <History size={11} />Past searches
+            </p>
+            {historyLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => <div key={i} className="h-12 bg-slate-100 rounded-lg animate-pulse" />)}
+              </div>
+            ) : history.length === 0 ? (
+              <p className="text-sm text-slate-400 italic px-1">
+                No searches yet — every Hunt query you run will be saved here so you can revisit the results anytime.
               </p>
-              {historyLoading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map(i => <div key={i} className="h-12 bg-slate-100 rounded-lg animate-pulse" />)}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-1.5">
-                  {history.map(session => (
-                    <button
-                      key={session.id}
-                      onClick={() => loadSession(session)}
-                      className="group flex items-center gap-3 text-left bg-white border border-slate-200 rounded-lg px-4 py-3 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {history.map(session => (
+                  <button
+                    key={session.id}
+                    onClick={() => loadSession(session)}
+                    className="group flex items-center gap-3 text-left bg-white border border-slate-200 rounded-lg px-4 py-3 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-slate-700 truncate group-hover:text-blue-800">{session.query}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{session.resultCount} compan{session.resultCount === 1 ? "y" : "ies"} · {formatDate(session.createdAt)}</p>
+                    </div>
+                    <span
+                      onClick={(e) => deleteSession(session.id, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all rounded"
+                      title="Delete"
                     >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm text-slate-700 truncate group-hover:text-blue-800">{session.query}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">{session.resultCount} compan{session.resultCount === 1 ? "y" : "ies"} · {formatDate(session.createdAt)}</p>
-                      </div>
-                      <span
-                        onClick={(e) => deleteSession(session.id, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all rounded"
-                        title="Delete"
-                      >
-                        <Trash2 size={13} />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                      <Trash2 size={13} />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Example queries */}
           <div>

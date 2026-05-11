@@ -6,12 +6,16 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 export async function GET() {
-  const sessions = await db.huntSession.findMany({
-    select: { id: true, query: true, resultCount: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
-  return NextResponse.json({ sessions });
+  try {
+    const sessions = await db.huntSession.findMany({
+      select: { id: true, query: true, resultCount: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    return NextResponse.json({ sessions });
+  } catch {
+    return NextResponse.json({ sessions: [] });
+  }
 }
 
 function isRateLimitError(err: unknown) {
@@ -149,10 +153,14 @@ Return ONLY a JSON array:
         return r;
       });
 
-    // Persist the session so history survives navigation and redeployments
-    await db.huntSession.create({
-      data: { query: query.trim(), results: JSON.stringify(results), resultCount: results.length },
-    });
+    // Persist session — wrapped separately so a DB failure never blocks results
+    try {
+      await db.huntSession.create({
+        data: { query: query.trim(), results: JSON.stringify(results), resultCount: results.length },
+      });
+    } catch (saveErr) {
+      console.error("Hunt session save failed:", saveErr);
+    }
 
     return NextResponse.json({ results, query: query.trim() });
 
