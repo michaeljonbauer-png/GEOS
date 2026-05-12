@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  Sparkles, ThumbsUp, ThumbsDown, ExternalLink, RefreshCw,
+  Sparkles, ThumbsUp, ThumbsDown, RefreshCw,
   AlertCircle, Search, ChevronDown, ChevronUp, CheckCircle2, XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -67,8 +68,9 @@ function LeadCard({ lead, onPursue, onPass, onRefresh, processing, refreshing }:
   lead: Lead; onPursue: () => void; onPass: () => void; onRefresh: () => void;
   processing: boolean; refreshing: boolean;
 }) {
+  const router = useRouter();
   return (
-    <div className={`relative bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${processing ? "opacity-40 scale-[0.98] pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"} ${refreshing ? "ring-2 ring-violet-300 ring-offset-1" : ""}`}>
+    <div onClick={() => router.push(`/companies/${lead.id}`)} className={`relative bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 cursor-pointer ${processing ? "opacity-40 scale-[0.98] pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"} ${refreshing ? "ring-2 ring-violet-300 ring-offset-1" : ""}`}>
       {refreshing && (
         <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] rounded-xl flex items-center justify-center z-10 pointer-events-none">
           <div className="flex items-center gap-2 bg-violet-600 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg">
@@ -99,7 +101,7 @@ function LeadCard({ lead, onPursue, onPass, onRefresh, processing, refreshing }:
       {lead.scoreBreakdown && <ScoreBreakdownPanel breakdown={lead.scoreBreakdown} />}
       <MetricRow arrEstimate={lead.arrEstimate} arrGrowth={lead.arrGrowth} employees={lead.employees} />
       {lead.source && <p className="text-[10px] text-slate-400 mb-3 flex items-center gap-1"><AlertCircle size={9} className="shrink-0" />AI estimate · verify via {lead.source}</p>}
-      <div className="flex flex-col gap-2 mt-auto">
+      <div className="flex flex-col gap-2 mt-auto" onClick={e => e.stopPropagation()}>
         <button onClick={onRefresh} disabled={refreshing} className="flex items-center justify-center gap-1.5 text-[10px] font-medium text-violet-600 hover:text-violet-800 hover:bg-violet-50 rounded-md py-1 transition-colors disabled:opacity-50">
           <Search size={10} className={refreshing ? "animate-pulse" : ""} />
           {refreshing ? "Verifying with live web data…" : "Refresh with live web data"}
@@ -107,7 +109,6 @@ function LeadCard({ lead, onPursue, onPass, onRefresh, processing, refreshing }:
         <div className="flex gap-2">
           <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs" onClick={onPursue}><ThumbsUp size={12} className="mr-1" />Pursue</Button>
           <Button size="sm" variant="outline" className="flex-1 text-red-500 hover:bg-red-50 border-red-200 text-xs" onClick={onPass}><ThumbsDown size={12} className="mr-1" />Pass</Button>
-          <Link href={`/companies/${lead.id}`}><Button size="sm" variant="outline" className="px-2.5"><ExternalLink size={12} /></Button></Link>
         </div>
       </div>
     </div>

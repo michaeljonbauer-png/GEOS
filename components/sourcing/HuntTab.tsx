@@ -203,7 +203,7 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
     try {
       const res = await fetch("/api/companies", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: result.name, website: result.website, description: result.description, sector: result.sector, subSector: result.subSector, geography: result.geography, founded: result.founded, stage: result.stage, totalFundingM: result.totalFundingM, employees: result.employees, arrEstimate: result.arrEstimate, arrGrowth: result.arrGrowth, status: "IDENTIFIED", priority: "MEDIUM", source: `Hunt: ${lastQuery}` }),
+        body: JSON.stringify({ name: result.name, website: result.website, description: result.description, sector: result.sector, subSector: result.subSector, geography: result.geography, founded: result.founded, stage: result.stage, totalFundingM: result.totalFundingM, employees: result.employees, arrEstimate: result.arrEstimate, arrGrowth: result.arrGrowth, status: "IDENTIFIED", priority: "MEDIUM", source: `Hunt: ${lastQuery}`, recommendationScore: result.huntScore, recommendationRationale: result.huntRationale }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Server error");
