@@ -32,12 +32,10 @@ function ScoutCard({ result, onAdd, onDismiss, adding, dismissed, addedId }: {
 }) {
   const router = useRouter();
 
-  const handleCardClick = async () => {
+  const handleViewProfile = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (adding) return;
-    if (addedId) {
-      router.push(`/companies/${addedId}`);
-      return;
-    }
+    if (addedId) { router.push(`/companies/${addedId}`); return; }
     const id = await onAdd();
     if (id) router.push(`/companies/${id}`);
   };
@@ -72,16 +70,30 @@ function ScoutCard({ result, onAdd, onDismiss, adding, dismissed, addedId }: {
   }
 
   return (
-    <div
-      onClick={handleCardClick}
-      className={`cursor-pointer bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${adding ? "opacity-40 scale-[0.98] pointer-events-none" : "hover:border-emerald-300 hover:shadow-sm"}`}
-    >
+    <div className={`bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${adding ? "opacity-40 scale-[0.98] pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="min-w-0">
-          <h3 className="font-semibold text-slate-900 truncate text-sm">{result.name}</h3>
+        <div className="min-w-0 flex-1">
+          <button
+            onClick={handleViewProfile}
+            disabled={adding}
+            className="text-left w-full group"
+          >
+            <h3 className="font-semibold text-emerald-700 group-hover:text-emerald-900 group-hover:underline truncate text-sm transition-colors">
+              {result.name}
+            </h3>
+          </button>
           <p className="text-[11px] text-slate-400 mt-0.5">{[result.geography, result.stage, result.founded ? `Founded ${result.founded}` : null].filter(Boolean).join(" · ")}</p>
         </div>
-        <ScoreBadge score={result.fitScore} />
+        <div className="flex items-center gap-2 shrink-0">
+          <ScoreBadge score={result.fitScore} />
+          <button
+            onClick={handleViewProfile}
+            disabled={adding}
+            className="text-[10px] text-emerald-600 hover:text-emerald-800 font-medium flex items-center gap-0.5 whitespace-nowrap transition-colors"
+          >
+            {adding ? "Adding…" : "View profile"} <ArrowRight size={10} />
+          </button>
+        </div>
       </div>
       <div className="flex flex-wrap gap-1 mb-3">
         {result.sector && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">{result.sector}</span>}
@@ -97,8 +109,7 @@ function ScoutCard({ result, onAdd, onDismiss, adding, dismissed, addedId }: {
       <MetricRow arrEstimate={result.arrEstimate} arrGrowth={result.arrGrowth} employees={result.employees} />
       {result.totalFundingM != null && <p className="text-[10px] text-slate-400 mb-3">Total raised: <span className="font-medium text-slate-600">${result.totalFundingM}M</span></p>}
       {result.source && <p className="text-[10px] text-emerald-600 font-medium mb-3 flex items-center gap-1"><Search size={9} className="shrink-0" />{result.source}</p>}
-      <p className="text-[10px] text-slate-400 italic mb-3">Click card to add to pipeline &amp; open full profile</p>
-      <div className="flex gap-2 mt-auto" onClick={e => e.stopPropagation()}>
+      <div className="flex gap-2 mt-auto">
         <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs" onClick={() => onAdd()} disabled={adding}>
           <Building2 size={12} className="mr-1" />{adding ? "Adding…" : "Add to pipeline"}
         </Button>
@@ -167,8 +178,19 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Server error");
-      const s = new Set(dismissed); s.add(result.name); setDismissed(s);
+      if (!res.ok) {
+        // Company may already exist — try to find it by name
+        const search = await fetch(`/api/companies?search=${encodeURIComponent(result.name)}`);
+        if (search.ok) {
+          const existing: Array<{ id: string; name: string }> = await search.json();
+          const match = existing.find(c => c.name.toLowerCase() === result.name.toLowerCase());
+          if (match) {
+            const m = new Map(addedCompanies); m.set(result.name, match.id); setAddedCompanies(m);
+            return match.id;
+          }
+        }
+        throw new Error(data.error ?? "Server error");
+      }
       const m = new Map(addedCompanies); m.set(result.name, data.id); setAddedCompanies(m);
       toast({ title: `${result.name} added to pipeline` });
       return data.id;
