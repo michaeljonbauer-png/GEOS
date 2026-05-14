@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AlertCircle, ExternalLink, ThumbsDown, Building2, RotateCcw, Target, Loader2, Search, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -23,34 +23,59 @@ const EMPTY: Omit<ScoutResult, "name" | "inputName"> = {
 };
 
 function ScoutCard({ result, onAdd, onDismiss, adding, dismissed, addedId }: {
-  result: ScoutResult; onAdd: () => void; onDismiss: () => void; adding: boolean; dismissed: boolean; addedId: string | null;
+  result: ScoutResult;
+  onAdd: () => Promise<string | null>;
+  onDismiss: () => void;
+  adding: boolean;
+  dismissed: boolean;
+  addedId: string | null;
 }) {
+  const router = useRouter();
+
+  const handleCardClick = async () => {
+    if (adding) return;
+    if (addedId) {
+      router.push(`/companies/${addedId}`);
+      return;
+    }
+    const id = await onAdd();
+    if (id) router.push(`/companies/${id}`);
+  };
+
   if (addedId) {
     return (
-      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3">
+      <div
+        onClick={() => router.push(`/companies/${addedId}`)}
+        className="cursor-pointer bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3 hover:border-emerald-300 hover:shadow-sm transition-all"
+      >
         <div className="min-w-0">
           <p className="text-sm font-semibold text-emerald-800 truncate">{result.name}</p>
-          <p className="text-xs text-emerald-600 mt-0.5">Added to pipeline</p>
+          <p className="text-xs text-emerald-600 mt-0.5">Added · click to view full profile</p>
         </div>
-        <Link href={`/companies/${addedId}`}>
-          <Button size="sm" variant="outline" className="shrink-0 text-emerald-700 border-emerald-300 hover:bg-emerald-100 text-xs gap-1">
-            View details <ArrowRight size={11} />
-          </Button>
-        </Link>
+        <ArrowRight size={14} className="text-emerald-600 shrink-0" />
       </div>
     );
   }
+
   if (dismissed) return null;
+
   if (result.error) {
     return (
       <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-5 flex flex-col">
-        <div className="flex items-center gap-2 mb-2"><AlertCircle size={14} className="text-slate-400" /><h3 className="font-medium text-slate-500 text-sm">{result.inputName}</h3></div>
+        <div className="flex items-center gap-2 mb-2">
+          <AlertCircle size={14} className="text-slate-400" />
+          <h3 className="font-medium text-slate-500 text-sm">{result.inputName}</h3>
+        </div>
         <p className="text-xs text-slate-400">{result.error}</p>
       </div>
     );
   }
+
   return (
-    <div className={`bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${adding ? "opacity-40 scale-[0.98] pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"}`}>
+    <div
+      onClick={handleCardClick}
+      className={`cursor-pointer bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${adding ? "opacity-40 scale-[0.98] pointer-events-none" : "hover:border-emerald-300 hover:shadow-sm"}`}
+    >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
           <h3 className="font-semibold text-slate-900 truncate text-sm">{result.name}</h3>
@@ -72,14 +97,19 @@ function ScoutCard({ result, onAdd, onDismiss, adding, dismissed, addedId }: {
       <MetricRow arrEstimate={result.arrEstimate} arrGrowth={result.arrGrowth} employees={result.employees} />
       {result.totalFundingM != null && <p className="text-[10px] text-slate-400 mb-3">Total raised: <span className="font-medium text-slate-600">${result.totalFundingM}M</span></p>}
       {result.source && <p className="text-[10px] text-emerald-600 font-medium mb-3 flex items-center gap-1"><Search size={9} className="shrink-0" />{result.source}</p>}
-      <div className="flex gap-2 mt-auto">
-        <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs" onClick={onAdd} disabled={adding}>
+      <p className="text-[10px] text-slate-400 italic mb-3">Click card to add to pipeline &amp; open full profile</p>
+      <div className="flex gap-2 mt-auto" onClick={e => e.stopPropagation()}>
+        <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs" onClick={() => onAdd()} disabled={adding}>
           <Building2 size={12} className="mr-1" />{adding ? "Adding…" : "Add to pipeline"}
         </Button>
         <Button size="sm" variant="outline" className="flex-1 text-slate-400 hover:bg-slate-50 text-xs" onClick={onDismiss}>
           <ThumbsDown size={12} className="mr-1" />Dismiss
         </Button>
-        {result.website && <a href={result.website} target="_blank" rel="noopener noreferrer"><Button size="sm" variant="outline" className="px-2.5"><ExternalLink size={12} /></Button></a>}
+        {result.website && (
+          <a href={result.website} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" variant="outline" className="px-2.5"><ExternalLink size={12} /></Button>
+          </a>
+        )}
       </div>
     </div>
   );
@@ -92,6 +122,7 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
   useEffect(() => {
     if (prefill) setInput(prefill);
   }, [prefill]);
+
   const [results, setResults] = useState<ScoutResult[]>([]);
   const [scouting, setScouting] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number; name: string } | null>(null);
@@ -119,22 +150,34 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
     setScouting(false); setProgress(null);
   };
 
-  const addToPipeline = async (result: ScoutResult) => {
+  const addToPipeline = async (result: ScoutResult): Promise<string | null> => {
     setAddingId(result.name);
     try {
       const res = await fetch("/api/companies", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: result.name, website: result.website, description: result.description, sector: result.sector, subSector: result.subSector, geography: result.geography, founded: result.founded, stage: result.stage, totalFundingM: result.totalFundingM, employees: result.employees, arrEstimate: result.arrEstimate, arrGrowth: result.arrGrowth, status: "IDENTIFIED", priority: "MEDIUM", source: result.source ?? "Scout: web-verified", recommendationScore: result.fitScore, recommendationRationale: result.fitRationale }),
+        body: JSON.stringify({
+          name: result.name, website: result.website, description: result.description,
+          sector: result.sector, subSector: result.subSector, geography: result.geography,
+          founded: result.founded, stage: result.stage, totalFundingM: result.totalFundingM,
+          employees: result.employees, arrEstimate: result.arrEstimate, arrGrowth: result.arrGrowth,
+          status: "IDENTIFIED", priority: "MEDIUM",
+          source: result.source ?? "Scout: web-verified",
+          recommendationScore: result.fitScore,
+          recommendationRationale: result.fitRationale,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Server error");
       const s = new Set(dismissed); s.add(result.name); setDismissed(s);
       const m = new Map(addedCompanies); m.set(result.name, data.id); setAddedCompanies(m);
       toast({ title: `${result.name} added to pipeline` });
+      return data.id;
     } catch (err) {
       toast({ title: "Failed to add company", description: err instanceof Error ? err.message : "Network error — company was not saved.", variant: "destructive" });
+      return null;
+    } finally {
+      setAddingId(null);
     }
-    finally { setAddingId(null); }
   };
 
   const visibleCount = results.filter(r => !dismissed.has(r.name)).length;
@@ -179,7 +222,15 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {results.map((result, i) => (
-              <ScoutCard key={`${result.name}-${i}`} result={result} onAdd={() => addToPipeline(result)} onDismiss={() => { const s = new Set(dismissed); s.add(result.name); setDismissed(s); }} adding={addingId === result.name} dismissed={dismissed.has(result.name)} addedId={addedCompanies.get(result.name) ?? null} />
+              <ScoutCard
+                key={`${result.name}-${i}`}
+                result={result}
+                onAdd={() => addToPipeline(result)}
+                onDismiss={() => { const s = new Set(dismissed); s.add(result.name); setDismissed(s); }}
+                adding={addingId === result.name}
+                dismissed={dismissed.has(result.name)}
+                addedId={addedCompanies.get(result.name) ?? null}
+              />
             ))}
           </div>
         </>

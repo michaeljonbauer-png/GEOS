@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Sparkles, ThumbsDown, ExternalLink, Radar, Send, Building2,
   RotateCcw, ChevronDown, ChevronUp, Search, History, Trash2, Clock, ArrowRight,
@@ -43,22 +43,30 @@ function formatDate(iso: string) {
 }
 
 function HuntCard({ result, onAdd, onDismiss, onScout, adding, dismissed, addedId }: {
-  result: HuntResult; onAdd: () => void; onDismiss: () => void;
+  result: HuntResult; onAdd: () => Promise<string | null>; onDismiss: () => void;
   onScout: () => void; adding: boolean; dismissed: boolean; addedId: string | null;
 }) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
+
+  const handleCardClick = async () => {
+    if (adding) return;
+    if (addedId) { router.push(`/companies/${addedId}`); return; }
+    const id = await onAdd();
+    if (id) router.push(`/companies/${id}`);
+  };
+
   if (addedId) {
     return (
-      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3">
+      <div
+        onClick={() => router.push(`/companies/${addedId}`)}
+        className="cursor-pointer bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3 hover:border-emerald-300 hover:shadow-sm transition-all"
+      >
         <div className="min-w-0">
           <p className="text-sm font-semibold text-emerald-800 truncate">{result.name}</p>
-          <p className="text-xs text-emerald-600 mt-0.5">Added to pipeline</p>
+          <p className="text-xs text-emerald-600 mt-0.5">Added · click to view full profile</p>
         </div>
-        <Link href={`/companies/${addedId}`}>
-          <Button size="sm" variant="outline" className="shrink-0 text-emerald-700 border-emerald-300 hover:bg-emerald-100 text-xs gap-1">
-            View details <ArrowRight size={11} />
-          </Button>
-        </Link>
+        <ArrowRight size={14} className="text-emerald-600 shrink-0" />
       </div>
     );
   }
@@ -66,7 +74,10 @@ function HuntCard({ result, onAdd, onDismiss, onScout, adding, dismissed, addedI
   const descLong = (result.description ?? "").length > 180;
 
   return (
-    <div className={`bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${adding ? "opacity-40 scale-[0.98] pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"}`}>
+    <div
+      onClick={handleCardClick}
+      className={`cursor-pointer bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${adding ? "opacity-40 scale-[0.98] pointer-events-none" : "hover:border-blue-300 hover:shadow-sm"}`}
+    >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
           <h3 className="font-semibold text-slate-900 truncate text-sm">{result.name}</h3>
@@ -79,7 +90,7 @@ function HuntCard({ result, onAdd, onDismiss, onScout, adding, dismissed, addedI
         {result.subSector && <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 border border-slate-100">{result.subSector}</span>}
       </div>
       {result.description && (
-        <div className="mb-3">
+        <div className="mb-3" onClick={e => e.stopPropagation()}>
           <p className={`text-xs text-slate-500 leading-relaxed ${expanded ? "" : "line-clamp-3"}`}>{result.description}</p>
           {descLong && (
             <button onClick={() => setExpanded(v => !v)} className="mt-1 text-[11px] text-blue-500 hover:text-blue-700 flex items-center gap-0.5 font-medium">
@@ -98,8 +109,9 @@ function HuntCard({ result, onAdd, onDismiss, onScout, adding, dismissed, addedI
       {result.totalFundingM != null && (
         <p className="text-[10px] text-slate-400 mb-3">Total raised: <span className="font-medium text-slate-600">${result.totalFundingM}M</span>{result.source ? ` · ${result.source}` : ""}</p>
       )}
-      <div className="flex gap-2 mt-auto">
-        <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={onAdd} disabled={adding}>
+      <p className="text-[10px] text-slate-400 italic mb-3">Click card to add to pipeline &amp; open full profile</p>
+      <div className="flex gap-2 mt-auto" onClick={e => e.stopPropagation()}>
+        <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={() => onAdd()} disabled={adding}>
           <Building2 size={12} className="mr-1" />{adding ? "Adding…" : "Add to pipeline"}
         </Button>
         <Button size="sm" variant="outline" className="px-2.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50" onClick={onScout} title="Research in Scout">
@@ -198,7 +210,7 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
     } finally { setLoading(false); }
   };
 
-  const addToPipeline = async (result: HuntResult) => {
+  const addToPipeline = async (result: HuntResult): Promise<string | null> => {
     setAddingId(result.name);
     try {
       const res = await fetch("/api/companies", {
@@ -210,8 +222,10 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
       const s = new Set(dismissed); s.add(result.name); setDismissed(s);
       const m = new Map(addedCompanies); m.set(result.name, data.id); setAddedCompanies(m);
       toast({ title: `${result.name} added to pipeline` });
+      return data.id;
     } catch (err) {
       toast({ title: "Failed to add company", description: err instanceof Error ? err.message : "Network error — company was not saved.", variant: "destructive" });
+      return null;
     } finally { setAddingId(null); }
   };
 
