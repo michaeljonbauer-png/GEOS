@@ -419,8 +419,9 @@ model CompanyResearch {
 
 model HuntSession {
   id          String   @id @default(cuid())
+  type        String   @default("HUNT")
   query       String
-  results     String   // JSON: HuntResult[]
+  results     String   // JSON: HuntResult[] or ScoutResult[]
   resultCount Int      @default(0)
   createdAt   DateTime @default(now())
 }

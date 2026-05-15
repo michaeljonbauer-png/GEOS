@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import {
   Sparkles, ThumbsDown, ExternalLink, Radar, Send, Building2,
   RotateCcw, ChevronDown, ChevronUp, Search, History, Trash2, Clock, ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { ScoreBadge, MetricRow } from "./shared";
+import { ScoreBadge, MetricRow, CompanyPreviewModal, type CompanyPreviewData } from "./shared";
 
 interface HuntResult {
   name: string; website: string | null; description: string | null;
@@ -33,41 +32,35 @@ const EXAMPLE_QUERIES = [
 
 function formatDate(iso: string) {
   const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffH = diffMs / (1000 * 60 * 60);
+  const diffH = (Date.now() - d.getTime()) / 3600000;
   if (diffH < 1) return "just now";
   if (diffH < 24) return `${Math.floor(diffH)}h ago`;
   if (diffH < 48) return "yesterday";
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function HuntCard({ result, onAdd, onDismiss, onScout, adding, dismissed, addedId }: {
-  result: HuntResult; onAdd: () => Promise<string | null>; onDismiss: () => void;
-  onScout: () => void; adding: boolean; dismissed: boolean; addedId: string | null;
+function HuntCard({ result, onPreview, onAdd, onDismiss, onScout, adding, dismissed, addedId }: {
+  result: HuntResult;
+  onPreview: () => void;
+  onAdd: () => void;
+  onDismiss: () => void;
+  onScout: () => void;
+  adding: boolean;
+  dismissed: boolean;
+  addedId: string | null;
 }) {
-  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
-
-  const handleViewProfile = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (adding) return;
-    if (addedId) { router.push(`/companies/${addedId}`); return; }
-    const id = await onAdd();
-    if (id) router.push(`/companies/${id}`);
-  };
 
   if (addedId) {
     return (
-      <div
-        onClick={() => router.push(`/companies/${addedId}`)}
-        className="cursor-pointer bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3 hover:border-emerald-300 hover:shadow-sm transition-all"
-      >
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-emerald-800 truncate">{result.name}</p>
-          <p className="text-xs text-emerald-600 mt-0.5">Added · click to view full profile</p>
+          <p className="text-xs text-emerald-600 mt-0.5">Added to pipeline</p>
         </div>
-        <ArrowRight size={14} className="text-emerald-600 shrink-0" />
+        <button onClick={onPreview} className="flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900 shrink-0">
+          View profile <ArrowRight size={12} />
+        </button>
       </div>
     );
   }
@@ -75,10 +68,10 @@ function HuntCard({ result, onAdd, onDismiss, onScout, adding, dismissed, addedI
   const descLong = (result.description ?? "").length > 180;
 
   return (
-    <div className={`bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${adding ? "opacity-40 scale-[0.98] pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"}`}>
+    <div className={`bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${adding ? "opacity-40 pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0 flex-1">
-          <button onClick={handleViewProfile} disabled={adding} className="text-left w-full group">
+          <button onClick={onPreview} className="text-left w-full group">
             <h3 className="font-semibold text-blue-700 group-hover:text-blue-900 group-hover:underline truncate text-sm transition-colors">
               {result.name}
             </h3>
@@ -87,12 +80,8 @@ function HuntCard({ result, onAdd, onDismiss, onScout, adding, dismissed, addedI
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <ScoreBadge score={result.huntScore} label="match" />
-          <button
-            onClick={handleViewProfile}
-            disabled={adding}
-            className="text-[10px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5 whitespace-nowrap transition-colors"
-          >
-            {adding ? "Adding…" : "View profile"} <ArrowRight size={10} />
+          <button onClick={onPreview} className="text-[10px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5 whitespace-nowrap transition-colors">
+            View <ArrowRight size={9} />
           </button>
         </div>
       </div>
@@ -121,7 +110,7 @@ function HuntCard({ result, onAdd, onDismiss, onScout, adding, dismissed, addedI
         <p className="text-[10px] text-slate-400 mb-3">Total raised: <span className="font-medium text-slate-600">${result.totalFundingM}M</span>{result.source ? ` · ${result.source}` : ""}</p>
       )}
       <div className="flex gap-2 mt-auto">
-        <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={() => onAdd()} disabled={adding}>
+        <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={onAdd} disabled={adding}>
           <Building2 size={12} className="mr-1" />{adding ? "Adding…" : "Add to pipeline"}
         </Button>
         <Button size="sm" variant="outline" className="px-2.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50" onClick={onScout} title="Research in Scout">
@@ -145,8 +134,10 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
   const [addingId, setAddingId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [addedCompanies, setAddedCompanies] = useState<Map<string, string>>(new Map());
+  const [previewResult, setPreviewResult] = useState<HuntResult | null>(null);
   const [history, setHistory] = useState<HuntSessionMeta[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(true);
   const [activeSessionDate, setActiveSessionDate] = useState<string | null>(null);
 
   const fetchHistory = async () => {
@@ -156,16 +147,13 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
       setHistory(data.sessions ?? []);
       return data.sessions as HuntSessionMeta[];
     } catch {
-      return [];
+      return [] as HuntSessionMeta[];
     }
   };
 
-  // On mount: load history and auto-restore the most recent session
   useEffect(() => {
     fetchHistory().then(sessions => {
-      if (sessions.length > 0) {
-        loadSession(sessions[0]);
-      }
+      if (sessions.length > 0) loadSession(sessions[0]);
     }).finally(() => setHistoryLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -178,7 +166,9 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
       setResults(data.results ?? []);
       setLastQuery(session.query);
       setDismissed(new Set());
+      setAddedCompanies(new Map());
       setActiveSessionDate(session.createdAt);
+      setHistoryOpen(false);
     } catch {
       toast({ title: "Failed to load session", variant: "destructive" });
     }
@@ -188,12 +178,7 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
     e.stopPropagation();
     try {
       await fetch(`/api/hunt/${id}`, { method: "DELETE" });
-      const updated = history.filter(s => s.id !== id);
-      setHistory(updated);
-      // If we just deleted the active session, clear results
-      if (results.length > 0 && lastQuery === history.find(s => s.id === id)?.query) {
-        setResults([]); setQuery(""); setLastQuery(""); setActiveSessionDate(null);
-      }
+      setHistory(prev => prev.filter(s => s.id !== id));
     } catch {
       toast({ title: "Failed to delete", variant: "destructive" });
     }
@@ -201,7 +186,7 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
 
   const hunt = async (q = query) => {
     if (!q.trim() || loading) return;
-    setLoading(true); setResults([]); setDismissed(new Set()); setAddedCompanies(new Map()); setActiveSessionDate(null);
+    setLoading(true); setResults([]); setDismissed(new Set()); setAddedCompanies(new Map()); setActiveSessionDate(null); setHistoryOpen(false);
     try {
       const res = await fetch("/api/hunt", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -213,7 +198,6 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
       setLastQuery(data.query ?? q.trim());
       setActiveSessionDate(new Date().toISOString());
       if ((data.results ?? []).length === 0) toast({ title: "No results", description: "Try rephrasing or broadening the criteria." });
-      // Refresh history list to include this new session
       fetchHistory();
     } catch (err) {
       toast({ title: "Hunt failed", description: err instanceof Error ? err.message : "Network error", variant: "destructive" });
@@ -229,15 +213,11 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        // Company may already exist — try to find it by name
         const search = await fetch(`/api/companies?search=${encodeURIComponent(result.name)}`);
         if (search.ok) {
           const existing: Array<{ id: string; name: string }> = await search.json();
           const match = existing.find(c => c.name.toLowerCase() === result.name.toLowerCase());
-          if (match) {
-            const m = new Map(addedCompanies); m.set(result.name, match.id); setAddedCompanies(m);
-            return match.id;
-          }
+          if (match) { const m = new Map(addedCompanies); m.set(result.name, match.id); setAddedCompanies(m); return match.id; }
         }
         throw new Error(data.error ?? "Server error");
       }
@@ -246,19 +226,20 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
       toast({ title: `${result.name} added to pipeline` });
       return data.id;
     } catch (err) {
-      toast({ title: "Failed to add company", description: err instanceof Error ? err.message : "Network error — company was not saved.", variant: "destructive" });
+      toast({ title: "Failed to add company", description: err instanceof Error ? err.message : "Network error", variant: "destructive" });
       return null;
     } finally { setAddingId(null); }
   };
 
   const clearResults = () => {
-    setResults([]); setQuery(""); setLastQuery(""); setDismissed(new Set()); setAddedCompanies(new Map()); setActiveSessionDate(null);
+    setResults([]); setQuery(""); setLastQuery(""); setDismissed(new Set()); setAddedCompanies(new Map()); setActiveSessionDate(null); setHistoryOpen(true);
   };
 
   const useExample = (ex: string) => { setQuery(ex); setTimeout(() => hunt(ex), 0); };
 
   const hasResults = results.length > 0;
-  const visibleCount = results.filter(r => !dismissed.has(r.name)).length;
+  const visibleCount = results.filter(r => !dismissed.has(r.name) || addedCompanies.has(r.name)).length;
+  const previewAddedId = previewResult ? (addedCompanies.get(previewResult.name) ?? null) : null;
 
   return (
     <div>
@@ -282,7 +263,7 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
 
       {/* Loading skeleton */}
       {loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="bg-white border border-dashed border-slate-200 rounded-xl p-5 animate-pulse flex flex-col gap-3">
               <div className="flex justify-between"><div className="h-4 bg-slate-100 rounded w-36" /><div className="h-4 bg-slate-100 rounded w-14" /></div>
@@ -309,11 +290,12 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
               <RotateCcw size={13} className="mr-1.5" />New search
             </Button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {results.map(result => (
               <HuntCard
                 key={result.name}
                 result={result}
+                onPreview={() => setPreviewResult(result)}
                 onAdd={() => addToPipeline(result)}
                 onDismiss={() => { const s = new Set(dismissed); s.add(result.name); setDismissed(s); }}
                 onScout={() => onScout?.(result.name)}
@@ -323,33 +305,37 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
               />
             ))}
           </div>
-          {results.every(r => dismissed.has(r.name)) && (
-            <div className="text-center py-16 text-slate-400 text-sm">
-              All results dismissed.{" "}
-              <button className="text-blue-600 hover:underline" onClick={clearResults}>Start a new search</button>
+          {results.every(r => dismissed.has(r.name) && !addedCompanies.has(r.name)) && (
+            <div className="text-center py-8 text-slate-400 text-sm mb-8">
+              All results dismissed. <button className="text-blue-600 hover:underline" onClick={clearResults}>Start a new search</button>
             </div>
           )}
         </>
       )}
 
-      {/* Empty state: history + examples */}
-      {!hasResults && !loading && (
+      {/* History — always visible */}
+      {!loading && (
         <div>
-          {/* Past searches — always shown (loading skeleton or results or empty notice) */}
-          <div className="mb-8">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-              <History size={11} />Past searches
-            </p>
-            {historyLoading ? (
-              <div className="space-y-2">
+          <button
+            onClick={() => setHistoryOpen(v => !v)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 w-full text-left hover:text-slate-600 transition-colors"
+          >
+            <History size={11} />
+            Past searches
+            {history.length > 0 && <span className="text-[10px] font-normal ml-1">({history.length})</span>}
+            {historyOpen ? <ChevronUp size={10} className="ml-auto" /> : <ChevronDown size={10} className="ml-auto" />}
+          </button>
+          {historyOpen && (
+            historyLoading ? (
+              <div className="space-y-2 mb-6">
                 {[1, 2, 3].map(i => <div key={i} className="h-12 bg-slate-100 rounded-lg animate-pulse" />)}
               </div>
             ) : history.length === 0 ? (
-              <p className="text-sm text-slate-400 italic px-1">
+              <p className="text-sm text-slate-400 italic px-1 mb-6">
                 No searches yet — every Hunt query you run will be saved here so you can revisit the results anytime.
               </p>
             ) : (
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 mb-6">
                 {history.map(session => (
                   <button
                     key={session.id}
@@ -360,34 +346,45 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
                       <p className="text-sm text-slate-700 truncate group-hover:text-blue-800">{session.query}</p>
                       <p className="text-[11px] text-slate-400 mt-0.5">{session.resultCount} compan{session.resultCount === 1 ? "y" : "ies"} · {formatDate(session.createdAt)}</p>
                     </div>
-                    <span
-                      onClick={(e) => deleteSession(session.id, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all rounded"
-                      title="Delete"
-                    >
+                    <span onClick={(e) => deleteSession(session.id, e)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all rounded" title="Delete">
                       <Trash2 size={13} />
                     </span>
                   </button>
                 ))}
               </div>
-            )}
-          </div>
+            )
+          )}
 
-          {/* Example queries */}
-          <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-              <Sparkles size={11} />Example queries
-            </p>
-            <div className="flex flex-col gap-2">
-              {EXAMPLE_QUERIES.map((ex, i) => (
-                <button key={i} onClick={() => useExample(ex)} className="text-left text-sm text-slate-600 bg-white border border-slate-200 rounded-lg px-4 py-2.5 hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-colors">
-                  {ex}
-                </button>
-              ))}
+          {/* Example queries — only in empty state */}
+          {!hasResults && (
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <Sparkles size={11} />Example queries
+              </p>
+              <div className="flex flex-col gap-2">
+                {EXAMPLE_QUERIES.map((ex, i) => (
+                  <button key={i} onClick={() => useExample(ex)} className="text-left text-sm text-slate-600 bg-white border border-slate-200 rounded-lg px-4 py-2.5 hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-colors">
+                    {ex}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
+
+      {/* Company preview modal */}
+      <CompanyPreviewModal
+        company={previewResult as CompanyPreviewData | null}
+        open={!!previewResult}
+        onClose={() => setPreviewResult(null)}
+        addedId={previewAddedId}
+        adding={addingId === previewResult?.name}
+        onAdd={async () => {
+          if (!previewResult) return;
+          await addToPipeline(previewResult);
+        }}
+      />
     </div>
   );
 }

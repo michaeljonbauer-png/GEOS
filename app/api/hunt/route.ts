@@ -8,6 +8,7 @@ export const maxDuration = 120;
 export async function GET() {
   try {
     const sessions = await db.huntSession.findMany({
+      where: { type: "HUNT" },
       select: { id: true, query: true, resultCount: true, createdAt: true },
       orderBy: { createdAt: "desc" },
       take: 50,
@@ -156,7 +157,7 @@ Return ONLY a JSON array:
     // Persist session — wrapped separately so a DB failure never blocks results
     try {
       await db.huntSession.create({
-        data: { query: query.trim(), results: JSON.stringify(results), resultCount: results.length },
+        data: { type: "HUNT", query: query.trim(), results: JSON.stringify(results), resultCount: results.length },
       });
     } catch (saveErr) {
       console.error("Hunt session save failed:", saveErr);
