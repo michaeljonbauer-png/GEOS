@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AlertCircle, ExternalLink, ThumbsDown, Building2, RotateCcw, Target, Loader2, Search, ArrowRight, History, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { ScoreBadge, MetricRow, CompanyPreviewModal, type CompanyPreviewData } from "./shared";
+import { ScoreBadge, MetricRow } from "./shared";
 
 interface ScoutResult {
   name: string; inputName: string; website: string | null; description: string | null;
@@ -32,12 +34,11 @@ function formatDate(iso: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function ScoutCard({ result, onPreview, onAdd, onDismiss, adding, dismissed, addedId }: {
+function ScoutCard({ result, onView, onDismiss, navigating, dismissed, addedId }: {
   result: ScoutResult;
-  onPreview: () => void;
-  onAdd: () => void;
+  onView: () => void;
   onDismiss: () => void;
-  adding: boolean;
+  navigating: boolean;
   dismissed: boolean;
   addedId: string | null;
 }) {
@@ -50,9 +51,9 @@ function ScoutCard({ result, onPreview, onAdd, onDismiss, adding, dismissed, add
           <p className="text-sm font-semibold text-emerald-800 truncate">{result.name}</p>
           <p className="text-xs text-emerald-600 mt-0.5">Added to pipeline</p>
         </div>
-        <button onClick={onPreview} className="flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900 shrink-0">
-          View profile <ArrowRight size={12} />
-        </button>
+        <Link href={`/companies/${addedId}`} className="flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900 shrink-0">
+          View full profile <ArrowRight size={12} />
+        </Link>
       </div>
     );
   }
@@ -70,22 +71,18 @@ function ScoutCard({ result, onPreview, onAdd, onDismiss, adding, dismissed, add
   }
 
   return (
-    <div className={`bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${adding ? "opacity-40 pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"}`}>
+    <div className={`bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${navigating ? "opacity-50 pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0 flex-1">
-          <button onClick={onPreview} className="text-left w-full group">
-            <h3 className="font-semibold text-emerald-700 group-hover:text-emerald-900 group-hover:underline truncate text-sm transition-colors">
+          <button onClick={onView} className="text-left w-full group">
+            <h3 className="font-semibold text-emerald-700 group-hover:text-emerald-900 group-hover:underline truncate text-sm transition-colors flex items-center gap-1.5">
+              {navigating && <Loader2 size={12} className="animate-spin shrink-0" />}
               {result.name}
             </h3>
           </button>
           <p className="text-[11px] text-slate-400 mt-0.5">{[result.geography, result.stage, result.founded ? `Founded ${result.founded}` : null].filter(Boolean).join(" · ")}</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <ScoreBadge score={result.fitScore} />
-          <button onClick={onPreview} className="text-[10px] text-emerald-600 hover:text-emerald-800 font-medium flex items-center gap-0.5 transition-colors whitespace-nowrap">
-            View <ArrowRight size={9} />
-          </button>
-        </div>
+        <ScoreBadge score={result.fitScore} />
       </div>
       <div className="flex flex-wrap gap-1 mb-3">
         {result.sector && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">{result.sector}</span>}
@@ -100,8 +97,8 @@ function ScoutCard({ result, onPreview, onAdd, onDismiss, adding, dismissed, add
       )}
       <MetricRow arrEstimate={result.arrEstimate} arrGrowth={result.arrGrowth} employees={result.employees} />
       <div className="flex gap-2 mt-auto">
-        <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs" onClick={onAdd} disabled={adding}>
-          <Building2 size={12} className="mr-1" />{adding ? "Adding…" : "Add to pipeline"}
+        <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs" onClick={onView} disabled={navigating}>
+          <Building2 size={12} className="mr-1" />{navigating ? "Opening…" : "Add & view full profile"}
         </Button>
         <Button size="sm" variant="outline" className="flex-1 text-slate-400 hover:bg-slate-50 text-xs" onClick={onDismiss}>
           <ThumbsDown size={12} className="mr-1" />Dismiss
@@ -117,6 +114,7 @@ function ScoutCard({ result, onPreview, onAdd, onDismiss, adding, dismissed, add
 }
 
 export function ScoutTab({ prefill }: { prefill?: string }) {
+  const router = useRouter();
   const { toast } = useToast();
   const [input, setInput] = useState("");
   useEffect(() => { if (prefill) setInput(prefill); }, [prefill]);
@@ -126,9 +124,8 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
   const [scouting, setScouting] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number; name: string } | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-  const [addingId, setAddingId] = useState<string | null>(null);
+  const [navigatingId, setNavigatingId] = useState<string | null>(null);
   const [addedCompanies, setAddedCompanies] = useState<Map<string, string>>(new Map());
-  const [previewResult, setPreviewResult] = useState<ScoutResult | null>(null);
 
   // History
   const [history, setHistory] = useState<SessionMeta[]>([]);
@@ -205,7 +202,6 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
   };
 
   const addToPipeline = async (result: ScoutResult): Promise<string | null> => {
-    setAddingId(result.name);
     try {
       const res = await fetch("/api/companies", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -222,7 +218,6 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        // Fall back to finding existing company by name
         const search = await fetch(`/api/companies?search=${encodeURIComponent(result.name)}`);
         if (search.ok) {
           const existing: Array<{ id: string; name: string }> = await search.json();
@@ -234,18 +229,27 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
         }
         throw new Error(data.error ?? "Server error");
       }
-      const s = new Set(dismissed); s.add(result.name); setDismissed(s);
       const m = new Map(addedCompanies); m.set(result.name, data.id); setAddedCompanies(m);
-      toast({ title: `${result.name} added to pipeline` });
       return data.id;
     } catch (err) {
       toast({ title: "Failed to add company", description: err instanceof Error ? err.message : "Network error", variant: "destructive" });
       return null;
-    } finally { setAddingId(null); }
+    }
+  };
+
+  const addAndView = async (result: ScoutResult) => {
+    const existing = addedCompanies.get(result.name);
+    if (existing) { router.push(`/companies/${existing}`); return; }
+    setNavigatingId(result.name);
+    try {
+      const id = await addToPipeline(result);
+      if (id) router.push(`/companies/${id}`);
+    } finally {
+      setNavigatingId(null);
+    }
   };
 
   const visibleCount = results.filter(r => !dismissed.has(r.name) || addedCompanies.has(r.name)).length;
-  const previewAddedId = previewResult ? (addedCompanies.get(previewResult.name) ?? null) : null;
 
   return (
     <div>
@@ -297,10 +301,9 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
               <ScoutCard
                 key={`${result.name}-${i}`}
                 result={result}
-                onPreview={() => setPreviewResult(result)}
-                onAdd={() => addToPipeline(result)}
+                onView={() => addAndView(result)}
                 onDismiss={() => { const s = new Set(dismissed); s.add(result.name); setDismissed(s); }}
-                adding={addingId === result.name}
+                navigating={navigatingId === result.name}
                 dismissed={dismissed.has(result.name)}
                 addedId={addedCompanies.get(result.name) ?? null}
               />
@@ -362,19 +365,6 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
           <p className="text-xs max-w-sm mx-auto">Paste names from award lists, referrals, or your own research. Scout looks them up and scores each against your thesis.</p>
         </div>
       )}
-
-      {/* Company preview modal */}
-      <CompanyPreviewModal
-        company={previewResult as CompanyPreviewData | null}
-        open={!!previewResult}
-        onClose={() => setPreviewResult(null)}
-        addedId={previewAddedId}
-        adding={addingId === previewResult?.name}
-        onAdd={async () => {
-          if (!previewResult) return;
-          await addToPipeline(previewResult);
-        }}
-      />
     </div>
   );
 }

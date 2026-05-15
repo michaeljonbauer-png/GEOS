@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Sparkles, ThumbsDown, ExternalLink, Radar, Send, Building2,
-  RotateCcw, ChevronDown, ChevronUp, Search, History, Trash2, Clock, ArrowRight,
+  RotateCcw, ChevronDown, ChevronUp, Search, History, Trash2, Clock, ArrowRight, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { ScoreBadge, MetricRow, CompanyPreviewModal, type CompanyPreviewData } from "./shared";
+import { ScoreBadge, MetricRow } from "./shared";
 
 interface HuntResult {
   name: string; website: string | null; description: string | null;
@@ -39,13 +41,12 @@ function formatDate(iso: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function HuntCard({ result, onPreview, onAdd, onDismiss, onScout, adding, dismissed, addedId }: {
+function HuntCard({ result, onView, onDismiss, onScout, navigating, dismissed, addedId }: {
   result: HuntResult;
-  onPreview: () => void;
-  onAdd: () => void;
+  onView: () => void;
   onDismiss: () => void;
   onScout: () => void;
-  adding: boolean;
+  navigating: boolean;
   dismissed: boolean;
   addedId: string | null;
 }) {
@@ -58,9 +59,9 @@ function HuntCard({ result, onPreview, onAdd, onDismiss, onScout, adding, dismis
           <p className="text-sm font-semibold text-emerald-800 truncate">{result.name}</p>
           <p className="text-xs text-emerald-600 mt-0.5">Added to pipeline</p>
         </div>
-        <button onClick={onPreview} className="flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900 shrink-0">
-          View profile <ArrowRight size={12} />
-        </button>
+        <Link href={`/companies/${addedId}`} className="flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900 shrink-0">
+          View full profile <ArrowRight size={12} />
+        </Link>
       </div>
     );
   }
@@ -68,22 +69,18 @@ function HuntCard({ result, onPreview, onAdd, onDismiss, onScout, adding, dismis
   const descLong = (result.description ?? "").length > 180;
 
   return (
-    <div className={`bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${adding ? "opacity-40 pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"}`}>
+    <div className={`bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${navigating ? "opacity-50 pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0 flex-1">
-          <button onClick={onPreview} className="text-left w-full group">
-            <h3 className="font-semibold text-blue-700 group-hover:text-blue-900 group-hover:underline truncate text-sm transition-colors">
+          <button onClick={onView} className="text-left w-full group">
+            <h3 className="font-semibold text-blue-700 group-hover:text-blue-900 group-hover:underline truncate text-sm transition-colors flex items-center gap-1.5">
+              {navigating && <Loader2 size={12} className="animate-spin shrink-0" />}
               {result.name}
             </h3>
           </button>
           <p className="text-[11px] text-slate-400 mt-0.5">{[result.geography, result.stage, result.founded ? `Founded ${result.founded}` : null].filter(Boolean).join(" · ")}</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <ScoreBadge score={result.huntScore} label="match" />
-          <button onClick={onPreview} className="text-[10px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5 whitespace-nowrap transition-colors">
-            View <ArrowRight size={9} />
-          </button>
-        </div>
+        <ScoreBadge score={result.huntScore} label="match" />
       </div>
       <div className="flex flex-wrap gap-1 mb-3">
         {result.sector && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-medium border border-blue-100">{result.sector}</span>}
@@ -110,8 +107,8 @@ function HuntCard({ result, onPreview, onAdd, onDismiss, onScout, adding, dismis
         <p className="text-[10px] text-slate-400 mb-3">Total raised: <span className="font-medium text-slate-600">${result.totalFundingM}M</span>{result.source ? ` · ${result.source}` : ""}</p>
       )}
       <div className="flex gap-2 mt-auto">
-        <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={onAdd} disabled={adding}>
-          <Building2 size={12} className="mr-1" />{adding ? "Adding…" : "Add to pipeline"}
+        <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={onView} disabled={navigating}>
+          <Building2 size={12} className="mr-1" />{navigating ? "Opening…" : "Add & view full profile"}
         </Button>
         <Button size="sm" variant="outline" className="px-2.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50" onClick={onScout} title="Research in Scout">
           <Search size={12} />
@@ -126,15 +123,15 @@ function HuntCard({ result, onPreview, onAdd, onDismiss, onScout, adding, dismis
 }
 
 export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
+  const router = useRouter();
   const { toast } = useToast();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<HuntResult[]>([]);
   const [lastQuery, setLastQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const [addingId, setAddingId] = useState<string | null>(null);
+  const [navigatingId, setNavigatingId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [addedCompanies, setAddedCompanies] = useState<Map<string, string>>(new Map());
-  const [previewResult, setPreviewResult] = useState<HuntResult | null>(null);
   const [history, setHistory] = useState<HuntSessionMeta[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(true);
@@ -205,7 +202,6 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
   };
 
   const addToPipeline = async (result: HuntResult): Promise<string | null> => {
-    setAddingId(result.name);
     try {
       const res = await fetch("/api/companies", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -221,14 +217,24 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
         }
         throw new Error(data.error ?? "Server error");
       }
-      const s = new Set(dismissed); s.add(result.name); setDismissed(s);
       const m = new Map(addedCompanies); m.set(result.name, data.id); setAddedCompanies(m);
-      toast({ title: `${result.name} added to pipeline` });
       return data.id;
     } catch (err) {
       toast({ title: "Failed to add company", description: err instanceof Error ? err.message : "Network error", variant: "destructive" });
       return null;
-    } finally { setAddingId(null); }
+    }
+  };
+
+  const addAndView = async (result: HuntResult) => {
+    const existing = addedCompanies.get(result.name);
+    if (existing) { router.push(`/companies/${existing}`); return; }
+    setNavigatingId(result.name);
+    try {
+      const id = await addToPipeline(result);
+      if (id) router.push(`/companies/${id}`);
+    } finally {
+      setNavigatingId(null);
+    }
   };
 
   const clearResults = () => {
@@ -239,7 +245,6 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
 
   const hasResults = results.length > 0;
   const visibleCount = results.filter(r => !dismissed.has(r.name) || addedCompanies.has(r.name)).length;
-  const previewAddedId = previewResult ? (addedCompanies.get(previewResult.name) ?? null) : null;
 
   return (
     <div>
@@ -295,11 +300,10 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
               <HuntCard
                 key={result.name}
                 result={result}
-                onPreview={() => setPreviewResult(result)}
-                onAdd={() => addToPipeline(result)}
+                onView={() => addAndView(result)}
                 onDismiss={() => { const s = new Set(dismissed); s.add(result.name); setDismissed(s); }}
                 onScout={() => onScout?.(result.name)}
-                adding={addingId === result.name}
+                navigating={navigatingId === result.name}
                 dismissed={dismissed.has(result.name)}
                 addedId={addedCompanies.get(result.name) ?? null}
               />
@@ -372,19 +376,6 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
           )}
         </div>
       )}
-
-      {/* Company preview modal */}
-      <CompanyPreviewModal
-        company={previewResult as CompanyPreviewData | null}
-        open={!!previewResult}
-        onClose={() => setPreviewResult(null)}
-        addedId={previewAddedId}
-        adding={addingId === previewResult?.name}
-        onAdd={async () => {
-          if (!previewResult) return;
-          await addToPipeline(previewResult);
-        }}
-      />
     </div>
   );
 }
