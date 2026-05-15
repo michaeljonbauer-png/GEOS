@@ -6,16 +6,22 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 export async function GET() {
+  const select = { id: true, query: true, resultCount: true, createdAt: true } as const;
+  const orderBy = { createdAt: "desc" } as const;
   try {
+    // type column exists (post-migration)
     const sessions = await db.huntSession.findMany({
-      where: { type: "HUNT" },
-      select: { id: true, query: true, resultCount: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-      take: 50,
+      where: { type: "HUNT" }, select, orderBy, take: 50,
     });
     return NextResponse.json({ sessions });
   } catch {
-    return NextResponse.json({ sessions: [] });
+    // type column not yet created — return all sessions (they're all Hunt sessions)
+    try {
+      const sessions = await db.huntSession.findMany({ select, orderBy, take: 50 });
+      return NextResponse.json({ sessions });
+    } catch {
+      return NextResponse.json({ sessions: [] });
+    }
   }
 }
 
@@ -159,8 +165,16 @@ Return ONLY a JSON array:
       await db.huntSession.create({
         data: { type: "HUNT", query: query.trim(), results: JSON.stringify(results), resultCount: results.length },
       });
-    } catch (saveErr) {
-      console.error("Hunt session save failed:", saveErr);
+    } catch {
+      // type column may not exist yet (pre-migration) — retry without it
+      try {
+        await db.huntSession.create({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          data: { query: query.trim(), results: JSON.stringify(results), resultCount: results.length } as any,
+        });
+      } catch (saveErr) {
+        console.error("Hunt session save failed:", saveErr);
+      }
     }
 
     return NextResponse.json({ results, query: query.trim() });

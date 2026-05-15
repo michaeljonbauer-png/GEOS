@@ -13,6 +13,7 @@ export async function GET() {
     });
     return NextResponse.json({ sessions });
   } catch {
+    // type column not yet created — no Scout sessions can exist yet
     return NextResponse.json({ sessions: [] });
   }
 }
