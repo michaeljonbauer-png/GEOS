@@ -122,28 +122,43 @@ export function LeadsTab() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const generatingRef = useRef(false);
 
   const fetchLeads = useCallback(async (): Promise<Lead[]> => {
-    const res = await fetch("/api/leads");
-    if (!res.ok) return [];
-    return res.json();
+    try {
+      const res = await fetch("/api/leads");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        if (data.error) setGenerateError(data.error);
+        return [];
+      }
+      return res.json();
+    } catch { return []; }
   }, []);
 
   const topUp = useCallback(async () => {
     if (generatingRef.current) return;
     generatingRef.current = true;
     setGenerating(true);
+    setGenerateError(null);
     try {
       const res = await fetch("/api/leads/generate", { method: "POST" });
       const data = await res.json() as { generated?: number; message?: string; error?: string };
-      if (!res.ok) { toast({ title: "Could not generate leads", description: data.error ?? "Unknown error", variant: "destructive" }); return; }
+      if (!res.ok) {
+        const msg = data.error ?? "Unknown error";
+        setGenerateError(msg);
+        toast({ title: "Could not generate leads", description: msg, variant: "destructive" });
+        return;
+      }
       if (data.generated === 0 && data.message) toast({ title: data.message });
       setLeads(await fetchLeads());
     } catch (err) {
-      toast({ title: "Could not generate leads", description: err instanceof Error ? err.message : "Network error", variant: "destructive" });
+      const msg = err instanceof Error ? err.message : "Network error";
+      setGenerateError(msg);
+      toast({ title: "Could not generate leads", description: msg, variant: "destructive" });
     } finally { setGenerating(false); generatingRef.current = false; }
   }, [fetchLeads, toast]);
 
@@ -197,6 +212,18 @@ export function LeadsTab() {
           <RefreshCw size={13} className={`mr-1.5 ${generating ? "animate-spin" : ""}`} />{generating ? "Finding…" : "Refresh queue"}
         </Button>
       </div>
+      {generateError && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <AlertCircle size={16} className="shrink-0 text-red-500 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-red-700">Lead generation failed</p>
+            <p className="text-xs text-red-600 mt-0.5 break-words">{generateError}</p>
+            <button onClick={() => { setGenerateError(null); topUp(); }} className="mt-2 text-xs font-medium text-red-700 underline hover:no-underline">
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
       {leads.length === 0 && !generating && (
         <div className="text-center py-20">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-100 mx-auto mb-4"><Sparkles className="text-violet-500" size={28} /></div>
