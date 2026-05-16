@@ -27,7 +27,12 @@ export default function SourcingPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-5">
-        <h1 className="text-xl font-bold text-slate-900 mb-1">Sourcing</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-900 mb-1">Sourcing</h1>
+          <span className="text-[10px] font-mono text-slate-300" title="Deploy marker — confirms the latest build is live">
+            build 2026-05-16b
+          </span>
+        </div>
         <p className="text-sm text-slate-500">{current.desc}</p>
       </div>
 
