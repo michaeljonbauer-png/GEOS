@@ -57,10 +57,10 @@ export async function POST(req: NextRequest) {
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    // Load thesis + existing pipeline as background context
+    // Load thesis + existing pipeline as background context — non-fatal if DB is unavailable
     const [thesisCriteria, existingCompanies] = await Promise.all([
-      db.thesisCriterion.findMany({ where: { isActive: true }, orderBy: { order: "asc" } }),
-      db.company.findMany({ select: { name: true }, orderBy: { createdAt: "desc" }, take: 30 }),
+      db.thesisCriterion.findMany({ where: { isActive: true }, orderBy: { order: "asc" } }).catch(() => []),
+      db.company.findMany({ select: { name: true }, orderBy: { createdAt: "desc" }, take: 30 }).catch(() => []),
     ]);
 
     const thesisSummary = thesisCriteria.map(t => {

@@ -10,11 +10,12 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const company = await req.json() as CompanySnapshot;
+    // Non-fatal if DB is unavailable — return empty scorecard rather than an error
     const criteria = await db.thesisCriterion.findMany({
       where: { isActive: true },
       orderBy: [{ category: "asc" }, { order: "asc" }],
-    });
-    const fit = computeThesisFit(company, criteria as ThesisCriterion[]);
+    }).catch(() => [] as ThesisCriterion[]);
+    const fit = computeThesisFit(company, criteria);
     return NextResponse.json(fit);
   } catch (error) {
     console.error("thesis-fit error:", error);

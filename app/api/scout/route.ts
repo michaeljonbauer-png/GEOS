@@ -18,10 +18,11 @@ export async function POST(req: NextRequest) {
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+    // Non-fatal if DB is unavailable — Scout still works, just without thesis context
     const thesisCriteria = await db.thesisCriterion.findMany({
       where: { isActive: true },
       orderBy: { order: "asc" },
-    });
+    }).catch(() => []);
 
     const thesisSummary = thesisCriteria.map(t => {
       if (t.dataType === "RANGE" && t.companyField) {
