@@ -2,17 +2,17 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { AlertCircle, ExternalLink, ThumbsDown, Building2, RotateCcw, Target, Loader2, Search, ArrowRight, History, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { ScoreBadge, MetricRow } from "./shared";
+import { ScoreBadge, MetricRow, CompanyPreviewModal, type CompanyPreviewData } from "./shared";
 
 interface ScoutResult {
   name: string; inputName: string; website: string | null; description: string | null;
   sector: string | null; subSector: string | null; geography: string | null;
   founded: number | null; stage: string | null; totalFundingM: number | null;
   employees: number | null; arrEstimate: number | null; arrGrowth: number | null;
+  nrrEstimate?: number | null; grossMargin?: number | null;
   fitScore: number | null; fitRationale: string | null; source: string | null;
   error?: string;
 }
@@ -34,11 +34,12 @@ function formatDate(iso: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function ScoutCard({ result, onView, onDismiss, navigating, dismissed, addedId }: {
+function ScoutCard({ result, onOpenDetail, onAdd, onDismiss, adding, dismissed, addedId }: {
   result: ScoutResult;
-  onView: () => void;
+  onOpenDetail: () => void;
+  onAdd: () => void;
   onDismiss: () => void;
-  navigating: boolean;
+  adding: boolean;
   dismissed: boolean;
   addedId: string | null;
 }) {
@@ -71,12 +72,11 @@ function ScoutCard({ result, onView, onDismiss, navigating, dismissed, addedId }
   }
 
   return (
-    <div className={`bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${navigating ? "opacity-50 pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"}`}>
+    <div className={`bg-white border border-slate-200 rounded-xl p-5 flex flex-col transition-all duration-200 ${adding ? "opacity-40 pointer-events-none" : "hover:border-slate-300 hover:shadow-sm"}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0 flex-1">
-          <button onClick={onView} className="text-left w-full group">
-            <h3 className="font-semibold text-emerald-700 group-hover:text-emerald-900 group-hover:underline truncate text-sm transition-colors flex items-center gap-1.5">
-              {navigating && <Loader2 size={12} className="animate-spin shrink-0" />}
+          <button onClick={onOpenDetail} className="text-left w-full group" title="View full details & thesis fit">
+            <h3 className="font-semibold text-emerald-700 group-hover:text-emerald-900 underline decoration-emerald-200 underline-offset-2 group-hover:decoration-emerald-500 truncate text-sm transition-colors">
               {result.name}
             </h3>
           </button>
@@ -97,11 +97,14 @@ function ScoutCard({ result, onView, onDismiss, navigating, dismissed, addedId }
       )}
       <MetricRow arrEstimate={result.arrEstimate} arrGrowth={result.arrGrowth} employees={result.employees} />
       <div className="flex gap-2 mt-auto">
-        <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs" onClick={onView} disabled={navigating}>
-          <Building2 size={12} className="mr-1" />{navigating ? "Opening…" : "Add & view full profile"}
+        <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs" onClick={onOpenDetail}>
+          <Search size={12} className="mr-1" />View details & fit
         </Button>
-        <Button size="sm" variant="outline" className="flex-1 text-slate-400 hover:bg-slate-50 text-xs" onClick={onDismiss}>
-          <ThumbsDown size={12} className="mr-1" />Dismiss
+        <Button size="sm" variant="outline" className="px-2.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50" onClick={onAdd} disabled={adding} title="Add to pipeline">
+          <Building2 size={12} />
+        </Button>
+        <Button size="sm" variant="outline" className="px-2.5 text-slate-400 hover:bg-slate-50" onClick={onDismiss} title="Dismiss">
+          <ThumbsDown size={12} />
         </Button>
         {result.website && (
           <a href={result.website} target="_blank" rel="noopener noreferrer">
@@ -114,7 +117,6 @@ function ScoutCard({ result, onView, onDismiss, navigating, dismissed, addedId }
 }
 
 export function ScoutTab({ prefill }: { prefill?: string }) {
-  const router = useRouter();
   const { toast } = useToast();
   const [input, setInput] = useState("");
   useEffect(() => { if (prefill) setInput(prefill); }, [prefill]);
@@ -124,8 +126,9 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
   const [scouting, setScouting] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number; name: string } | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-  const [navigatingId, setNavigatingId] = useState<string | null>(null);
+  const [addingId, setAddingId] = useState<string | null>(null);
   const [addedCompanies, setAddedCompanies] = useState<Map<string, string>>(new Map());
+  const [previewResult, setPreviewResult] = useState<ScoutResult | null>(null);
 
   // History
   const [history, setHistory] = useState<SessionMeta[]>([]);
@@ -202,6 +205,7 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
   };
 
   const addToPipeline = async (result: ScoutResult): Promise<string | null> => {
+    setAddingId(result.name);
     try {
       const res = await fetch("/api/companies", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -210,6 +214,7 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
           sector: result.sector, subSector: result.subSector, geography: result.geography,
           founded: result.founded, stage: result.stage, totalFundingM: result.totalFundingM,
           employees: result.employees, arrEstimate: result.arrEstimate, arrGrowth: result.arrGrowth,
+          nrrEstimate: result.nrrEstimate, grossMargin: result.grossMargin,
           status: "IDENTIFIED", priority: "MEDIUM",
           source: result.source ?? "Scout: web-verified",
           recommendationScore: result.fitScore,
@@ -230,26 +235,16 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
         throw new Error(data.error ?? "Server error");
       }
       const m = new Map(addedCompanies); m.set(result.name, data.id); setAddedCompanies(m);
+      toast({ title: `${result.name} added to pipeline` });
       return data.id;
     } catch (err) {
       toast({ title: "Failed to add company", description: err instanceof Error ? err.message : "Network error", variant: "destructive" });
       return null;
-    }
-  };
-
-  const addAndView = async (result: ScoutResult) => {
-    const existing = addedCompanies.get(result.name);
-    if (existing) { router.push(`/companies/${existing}`); return; }
-    setNavigatingId(result.name);
-    try {
-      const id = await addToPipeline(result);
-      if (id) router.push(`/companies/${id}`);
-    } finally {
-      setNavigatingId(null);
-    }
+    } finally { setAddingId(null); }
   };
 
   const visibleCount = results.filter(r => !dismissed.has(r.name) || addedCompanies.has(r.name)).length;
+  const previewAddedId = previewResult ? (addedCompanies.get(previewResult.name) ?? null) : null;
 
   return (
     <div>
@@ -301,9 +296,10 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
               <ScoutCard
                 key={`${result.name}-${i}`}
                 result={result}
-                onView={() => addAndView(result)}
+                onOpenDetail={() => setPreviewResult(result)}
+                onAdd={() => addToPipeline(result)}
                 onDismiss={() => { const s = new Set(dismissed); s.add(result.name); setDismissed(s); }}
-                navigating={navigatingId === result.name}
+                adding={addingId === result.name}
                 dismissed={dismissed.has(result.name)}
                 addedId={addedCompanies.get(result.name) ?? null}
               />
@@ -365,6 +361,19 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
           <p className="text-xs max-w-sm mx-auto">Paste names from award lists, referrals, or your own research. Scout looks them up and scores each against your thesis.</p>
         </div>
       )}
+
+      {/* Company detail modal — full thesis fit scorecard, no pipeline add required */}
+      <CompanyPreviewModal
+        company={previewResult as CompanyPreviewData | null}
+        open={!!previewResult}
+        onClose={() => setPreviewResult(null)}
+        addedId={previewAddedId}
+        adding={addingId === previewResult?.name}
+        onAdd={async () => {
+          if (!previewResult) return;
+          await addToPipeline(previewResult);
+        }}
+      />
     </div>
   );
 }
