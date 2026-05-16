@@ -10,8 +10,8 @@ export async function GET() {
       orderBy: [{ recommendationScore: "desc" }, { recommendedAt: "desc" }],
     });
     return NextResponse.json(leads);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Database error";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json([]);
   }
 }

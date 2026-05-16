@@ -4,8 +4,13 @@ import { db } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const contacts = await db.lPContact.findMany({ orderBy: { name: "asc" } });
-  return NextResponse.json(contacts);
+  try {
+    const contacts = await db.lPContact.findMany({ orderBy: { name: "asc" } });
+    return NextResponse.json(contacts);
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json([]);
+  }
 }
 
 export async function POST(req: NextRequest) {

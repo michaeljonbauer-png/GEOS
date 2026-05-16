@@ -6,7 +6,7 @@ buildCommand = "npm run build"
 # Seed is demo-data only and must never block startup — if it fails, the app
 # still starts. Previously a seed failure broke the && chain and Railway kept
 # serving the last healthy (stale) deploy.
-startCommand = "npx prisma db push --accept-data-loss || true; (npx tsx prisma/seed.ts || echo 'seed skipped'); npm run start"
+startCommand = "npx prisma db push || true; (npx tsx prisma/seed.ts || echo 'seed skipped'); npm run start"
 healthcheckPath = "/"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"

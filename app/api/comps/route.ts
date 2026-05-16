@@ -7,8 +7,9 @@ export async function GET() {
   try {
     const comps = await db.comp.findMany({ orderBy: { dealDate: "desc" } });
     return NextResponse.json(comps);
-  } catch {
-    return NextResponse.json({ error: "Failed to fetch comps" }, { status: 500 });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json([]);
   }
 }
 

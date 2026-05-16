@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(interactions);
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "Failed to fetch interactions" }, { status: 500 });
+    return NextResponse.json([]);
   }
 }
 
