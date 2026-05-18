@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   TrendingUp, Users, DollarSign, ExternalLink, Building2, ArrowRight,
-  ShieldCheck, CheckCircle2, XCircle, HelpCircle, Zap, Loader2, Sparkles,
+  ShieldCheck, CheckCircle2, XCircle, HelpCircle, Zap, Loader2, Sparkles, Send,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -283,11 +283,18 @@ export function CompanyPreviewModal({
 
         <div className="flex gap-2 pt-4 border-t border-slate-100">
           {addedId ? (
-            <Link href={`/companies/${addedId}`} className="flex-1" onClick={onClose}>
-              <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5">
-                Open full pipeline profile <ArrowRight size={14} />
-              </Button>
-            </Link>
+            <>
+              <Link href={`/outreach?companyId=${addedId}`} className="flex-1" onClick={onClose}>
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+                  <Send size={14} /> Draft outreach
+                </Button>
+              </Link>
+              <Link href={`/companies/${addedId}`} onClick={onClose}>
+                <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
+                  Full profile <ArrowRight size={13} />
+                </Button>
+              </Link>
+            </>
           ) : (
             <Button
               className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
