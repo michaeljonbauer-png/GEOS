@@ -244,7 +244,7 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             firstName: parts[0], lastName: parts.slice(1).join(" ") || "-",
-            title: result.founderTitle ?? null,
+            title: result.founderTitle ?? "Founder",
             linkedinUrl: result.founderLinkedIn ?? null,
             email: result.founderEmail ?? null,
             isPrimary: true, companyId: data.id,
