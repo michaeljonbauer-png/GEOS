@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
         ],
       },
       include: {
-        contacts: { where: { isPrimary: true }, take: 1 },
+        contacts: { select: { id: true, firstName: true, lastName: true, title: true, email: true, linkedinUrl: true, isPrimary: true }, orderBy: [{ isPrimary: "desc" }, { lastName: "asc" }] },
         feedback: { orderBy: { createdAt: "desc" }, take: 1 },
         _count: { select: { interactions: true, contacts: true } },
       },

@@ -14,6 +14,8 @@ interface ScoutResult {
   employees: number | null; arrEstimate: number | null; arrGrowth: number | null;
   nrrEstimate?: number | null; grossMargin?: number | null;
   fitScore: number | null; fitRationale: string | null; source: string | null;
+  founderName?: string | null; founderTitle?: string | null;
+  founderLinkedIn?: string | null; founderEmail?: string | null;
   error?: string;
 }
 
@@ -235,6 +237,20 @@ export function ScoutTab({ prefill }: { prefill?: string }) {
         throw new Error(data.error ?? "Server error");
       }
       const m = new Map(addedCompanies); m.set(result.name, data.id); setAddedCompanies(m);
+      // Auto-create founder/CEO contact if available
+      if (result.founderName) {
+        const parts = result.founderName.trim().split(/\s+/);
+        fetch("/api/contacts", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: parts[0], lastName: parts.slice(1).join(" ") || "-",
+            title: result.founderTitle ?? null,
+            linkedinUrl: result.founderLinkedIn ?? null,
+            email: result.founderEmail ?? null,
+            isPrimary: true, companyId: data.id,
+          }),
+        }).catch(() => { /* non-fatal */ });
+      }
       toast({ title: `${result.name} added to pipeline` });
       return data.id;
     } catch (err) {

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, Copy, Check, Send, Mail, Linkedin, Building2 } from "lucide-react";
+import { Sparkles, Copy, Check, Send, Mail, Linkedin, Building2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,7 @@ interface Company {
   arrEstimate: number | null;
   arrGrowth: number | null;
   status: string;
-  contacts: { id: string; firstName: string; lastName: string; title: string | null; email: string | null }[];
+  contacts: { id: string; firstName: string; lastName: string; title: string | null; email: string | null; linkedinUrl: string | null; isPrimary: boolean }[];
 }
 
 interface Interaction {
@@ -288,7 +288,7 @@ function OutreachPage() {
                       </span>
                     )}
                   </CardTitle>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Button
                       variant="outline"
                       size="sm"
@@ -302,6 +302,16 @@ function OutreachPage() {
                         <Mail size={14} /> Open in Mail
                       </Button>
                     )}
+                    {(() => {
+                      const contact = selectedCompany?.contacts.find((c) => c.id === form.contactId) ?? selectedCompany?.contacts[0];
+                      return contact?.linkedinUrl ? (
+                        <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer">
+                          <Button variant="outline" size="sm" className="text-blue-600 border-blue-200 hover:bg-blue-50">
+                            <Linkedin size={14} /> Open LinkedIn
+                          </Button>
+                        </a>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
               </CardHeader>
@@ -393,27 +403,46 @@ function OutreachPage() {
             </CardContent>
           </Card>
 
-          {selectedCompany && (
+          {selectedCompany && selectedCompany.contacts.length > 0 && (
             <Card className="mt-4">
-              <CardHeader>
-                <CardTitle className="text-base text-sm">
-                  <Building2 size={14} className="inline mr-1.5 text-slate-400" />
-                  {selectedCompany.name}
-                </CardTitle>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Contacts</CardTitle>
               </CardHeader>
-              <CardContent className="text-xs text-slate-500 space-y-1.5">
-                {selectedCompany.sector && <p>Sector: {selectedCompany.sector}</p>}
-                {selectedCompany.arrEstimate && (
-                  <p>ARR: ~${selectedCompany.arrEstimate}M</p>
-                )}
-                {selectedCompany.arrGrowth && (
-                  <p>Growth: +{selectedCompany.arrGrowth}% YoY</p>
-                )}
-                {selectedCompany.description && (
-                  <p className="text-slate-400 pt-1 leading-relaxed line-clamp-3">
-                    {selectedCompany.description}
-                  </p>
-                )}
+              <CardContent className="space-y-3">
+                {selectedCompany.contacts.map((c) => (
+                  <div key={c.id} className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">
+                        {c.firstName} {c.lastName}
+                        {c.isPrimary && <span className="ml-1.5 text-[10px] text-emerald-600 font-semibold uppercase tracking-wide">Primary</span>}
+                      </p>
+                      {c.title && <p className="text-xs text-slate-400 truncate">{c.title}</p>}
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      {c.email && (
+                        <a href={`mailto:${c.email}`} title={c.email} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors">
+                          <Mail size={13} />
+                        </a>
+                      )}
+                      {c.linkedinUrl && (
+                        <a href={c.linkedinUrl} target="_blank" rel="noopener noreferrer" title="Open LinkedIn profile" className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors">
+                          <Linkedin size={13} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {selectedCompany && selectedCompany.contacts.length === 0 && (
+            <Card className="mt-4">
+              <CardContent className="py-4 text-center text-xs text-slate-400">
+                No contacts yet —{" "}
+                <Link href={`/companies/${selectedCompany.id}`} className="text-blue-600 hover:underline">
+                  add one on the company page
+                </Link>
               </CardContent>
             </Card>
           )}

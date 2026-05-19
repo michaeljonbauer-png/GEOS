@@ -73,6 +73,10 @@ Return ONLY a single JSON object (no markdown, no explanation):
   "acquiredBy": null,
   "fitScore": 82,
   "fitRationale": "2-3 sentences: how well this fits the thesis and why",
+  "founderName": "Jane Smith",
+  "founderTitle": "Co-Founder & CEO",
+  "founderLinkedIn": "https://linkedin.com/in/janesmith",
+  "founderEmail": "jane@company.com",
   "source": "Web search — verified ${today}"
 }
 

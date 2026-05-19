@@ -122,6 +122,10 @@ Return ONLY a JSON array:
   "acquiredBy": null,
   "huntRationale": "2-3 sentences: why this company matches the hunt query specifically",
   "huntScore": 88,
+  "founderName": "Jane Smith",
+  "founderTitle": "Co-Founder & CEO",
+  "founderLinkedIn": "https://linkedin.com/in/janesmith",
+  "founderEmail": "jane@company.com",
   "source": "Training knowledge — verify via Refresh"
 }]`,
       }],
