@@ -17,6 +17,7 @@ import {
   Sparkles,
   Scale,
   Calculator,
+  ClipboardList,
   Menu,
   X,
   type LucideIcon,
@@ -34,6 +35,7 @@ const navItems = [
 ];
 
 const dealItems = [
+  { href: "/underwrite", label: "Underwrite", icon: ClipboardList },
   { href: "/live-deal", label: "Live Deal", icon: Briefcase },
   { href: "/portfolio", label: "Portfolio", icon: BarChart3 },
   { href: "/lp-reporting", label: "LP Communications", icon: Users },
