@@ -29,6 +29,7 @@ import {
   getStatusConfig, formatARR, formatGrowth, scoreColor, scoreBg,
   COMPANY_STATUSES, SECTORS, STAGES, INTERACTION_TYPES,
 } from "@/lib/utils";
+import { computeUnderwriteScore, KPI_DEFINITIONS, type KPIScore } from "@/lib/underwrite-scoring";
 
 const PRIORITIES = [
   { value: "HIGH", label: "High", color: "bg-red-100 text-red-700 border-red-300" },
@@ -43,6 +44,20 @@ interface ScoreDetail {
   notes: string | null;
   criterionId: string;
   criterion: { id: string; name: string; description: string | null; weight: number; minThreshold: number };
+}
+
+interface UnderwriteRecord {
+  id: string;
+  status: string;
+  analystName: string | null;
+  arrGrowth: number | null;
+  ndr: number | null;
+  gdr: number | null;
+  logoRetention: number | null;
+  grossMargin: number | null;
+  ruleOf40: number | null;
+  burnMultiple1yr: number | null;
+  burnMultipleLtd: number | null;
 }
 
 interface Contact {
@@ -136,16 +151,19 @@ export default function CompanyDetailPage() {
   const [noteText, setNoteText] = useState("");
   const [sources, setSources] = useState<Record<string, { sourceLabel: string; sourceUrl: string | null; capturedAt?: string }>>({});
   const [refreshing, setRefreshing] = useState(false);
+  const [underwrite, setUnderwrite] = useState<UnderwriteRecord | null>(null);
 
   const load = useCallback(() => {
     Promise.all([
       fetch(`/api/companies/${id}`).then((r) => r.json()),
       fetch("/api/criteria").then((r) => r.json()),
       fetch(`/api/companies/${id}/sources`).then((r) => r.json()),
-    ]).then(([co, crits, srcs]) => {
+      fetch(`/api/underwrite?companyId=${id}`).then((r) => r.json()).catch(() => []),
+    ]).then(([co, crits, srcs, uwList]) => {
       setCompany(co);
       setCriteria(crits);
       setSources(srcs ?? {});
+      setUnderwrite(Array.isArray(uwList) && uwList.length > 0 ? uwList[0] : null);
       const initialScores: Record<string, { score: string; notes: string }> = {};
       (co.scoreDetails as ScoreDetail[]).forEach((sd) => {
         initialScores[sd.criterionId] = { score: sd.score.toString(), notes: sd.notes ?? "" };
@@ -705,43 +723,178 @@ export default function CompanyDetailPage() {
               );
             })()}
 
-            <Card>
-              <CardHeader><CardTitle className="text-base">Investment Score</CardTitle></CardHeader>
-              <CardContent>
-                {company.totalScore !== null ? (
-                  <div className="text-center mb-4">
-                    <span className={`text-5xl font-black ${scoreColor(company.totalScore)}`}>
-                      {company.totalScore.toFixed(1)}
-                    </span>
-                    <span className="text-slate-400 text-lg">/10</span>
-                  </div>
-                ) : (
-                  <p className="text-center text-slate-400 text-sm mb-4">Not yet scored</p>
-                )}
-                <div className="space-y-2">
-                  {company.scoreDetails.map((sd) => (
-                    <div key={sd.id}>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-slate-600">{sd.criterion.name}</span>
-                        <span className={`font-bold ${scoreColor(sd.score)}`}>{sd.score.toFixed(1)}</span>
-                      </div>
-                      <Progress value={sd.score * 10} className="h-1.5" />
+            {(() => {
+              const uwValues: Partial<Record<string, number>> = underwrite ? {
+                arrGrowth: underwrite.arrGrowth ?? undefined,
+                ndr: underwrite.ndr ?? undefined,
+                gdr: underwrite.gdr ?? undefined,
+                logoRetention: underwrite.logoRetention ?? undefined,
+                grossMargin: underwrite.grossMargin ?? undefined,
+                ruleOf40: underwrite.ruleOf40 ?? undefined,
+                burnMultiple1yr: underwrite.burnMultiple1yr ?? undefined,
+                burnMultipleLtd: underwrite.burnMultipleLtd ?? undefined,
+              } : {};
+              const { composite: uwComposite, kpis: uwKpis } = computeUnderwriteScore(uwValues);
+              const hasUwData = uwKpis.length > 0;
+
+              const blendedScore = (() => {
+                if (company.totalScore !== null && uwComposite !== null) {
+                  return Math.round(((company.totalScore + uwComposite) / 2) * 10) / 10;
+                }
+                return company.totalScore ?? uwComposite;
+              })();
+
+              return (
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">Investment Score</CardTitle>
+                      {underwrite && (
+                        <Link href={`/underwrite/${underwrite.id}`} className="text-xs text-blue-600 hover:underline">
+                          View Underwrite →
+                        </Link>
+                      )}
                     </div>
-                  ))}
-                  {company.scoreDetails.length === 0 && (
-                    <p className="text-xs text-slate-400 text-center py-2">
-                      Go to the Scoring tab to score this company
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                  </CardHeader>
+                  <CardContent>
+                    {blendedScore !== null ? (
+                      <div className="text-center mb-4">
+                        <span className={`text-5xl font-black ${scoreColor(blendedScore)}`}>
+                          {blendedScore.toFixed(1)}
+                        </span>
+                        <span className="text-slate-400 text-lg">/10</span>
+                        {company.totalScore !== null && uwComposite !== null && (
+                          <p className="text-[10px] text-slate-400 mt-1">Qualitative + KPI average</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-center text-slate-400 text-sm mb-4">Not yet scored</p>
+                    )}
+
+                    {/* Qualitative criteria */}
+                    {company.scoreDetails.length > 0 && (
+                      <div className="mb-4">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2">Qualitative</p>
+                        <div className="space-y-2">
+                          {company.scoreDetails.map((sd) => (
+                            <div key={sd.id}>
+                              <div className="flex justify-between text-xs mb-1">
+                                <span className="text-slate-600">{sd.criterion.name}</span>
+                                <span className={`font-bold ${scoreColor(sd.score)}`}>{sd.score.toFixed(1)}</span>
+                              </div>
+                              <Progress value={sd.score * 10} className="h-1.5" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* KPI metrics from underwrite */}
+                    {hasUwData && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2">
+                          KPI Metrics {uwComposite !== null && <span className="normal-case">(composite {uwComposite.toFixed(1)}/10)</span>}
+                        </p>
+                        <div className="space-y-2">
+                          {uwKpis.map((kpi: KPIScore) => {
+                            const def = KPI_DEFINITIONS.find((d) => d.key === kpi.key);
+                            const valueDisplay = def
+                              ? `${kpi.value}${def.unit}`
+                              : kpi.value.toString();
+                            return (
+                              <div key={kpi.key}>
+                                <div className="flex justify-between text-xs mb-1">
+                                  <span className="text-slate-600">
+                                    {kpi.name}
+                                    <span className="text-slate-400 ml-1">({valueDisplay})</span>
+                                  </span>
+                                  <span className={`font-bold ${scoreColor(kpi.score)}`}>{kpi.score}/10</span>
+                                </div>
+                                <Progress value={kpi.score * 10} className="h-1.5" />
+                                <p className="text-[10px] text-slate-400 mt-0.5">{kpi.label}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {company.scoreDetails.length === 0 && !hasUwData && (
+                      <p className="text-xs text-slate-400 text-center py-2">
+                        Score in the Scoring tab or{" "}
+                        <Link href="/underwrite" className="text-blue-600 hover:underline">create an underwrite</Link>
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
             </div>
           </div>
         </TabsContent>
 
         {/* Scoring Tab */}
         <TabsContent value="scoring">
+          {/* KPI Scorecard from Underwrite */}
+          {(() => {
+            const uwValues: Partial<Record<string, number>> = underwrite ? {
+              arrGrowth: underwrite.arrGrowth ?? undefined,
+              ndr: underwrite.ndr ?? undefined,
+              gdr: underwrite.gdr ?? undefined,
+              logoRetention: underwrite.logoRetention ?? undefined,
+              grossMargin: underwrite.grossMargin ?? undefined,
+              ruleOf40: underwrite.ruleOf40 ?? undefined,
+              burnMultiple1yr: underwrite.burnMultiple1yr ?? undefined,
+              burnMultipleLtd: underwrite.burnMultipleLtd ?? undefined,
+            } : {};
+            const { composite: uwComposite, kpis: uwKpis } = computeUnderwriteScore(uwValues);
+            if (uwKpis.length === 0) return null;
+            return (
+              <Card className="mb-4">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">KPI Scorecard</CardTitle>
+                    <div className="flex items-center gap-3">
+                      {uwComposite !== null && (
+                        <span className={`text-2xl font-black ${scoreColor(uwComposite)}`}>
+                          {uwComposite.toFixed(1)}<span className="text-sm font-normal text-slate-400">/10</span>
+                        </span>
+                      )}
+                      <Link href={`/underwrite/${underwrite!.id}`}>
+                        <Button size="sm" variant="outline">Edit KPIs</Button>
+                      </Link>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500">Objective metrics from underwrite — auto-scored against benchmarks</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {uwKpis.map((kpi: KPIScore) => {
+                      const def = KPI_DEFINITIONS.find((d) => d.key === kpi.key)!;
+                      const valueDisplay = `${kpi.value}${def.unit}`;
+                      const barColor = kpi.score >= 8 ? "bg-emerald-500" : kpi.score >= 6 ? "bg-green-500" : kpi.score >= 4 ? "bg-yellow-500" : "bg-red-500";
+                      return (
+                        <div key={kpi.key} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-slate-700">{kpi.name}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-slate-500">{valueDisplay}</span>
+                              <span className={`text-sm font-black ${scoreColor(kpi.score)}`}>{kpi.score}/10</span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-slate-200 rounded-full h-1.5 mb-1">
+                            <div className={`h-1.5 rounded-full ${barColor}`} style={{ width: `${kpi.score * 10}%` }} />
+                          </div>
+                          <p className="text-[10px] text-slate-400">{kpi.label}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
