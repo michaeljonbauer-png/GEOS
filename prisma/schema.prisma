@@ -59,6 +59,7 @@ model Company {
   dealTerms        DealTerm[]
   investment       PortfolioInvestment?
   kpiSnapshots     PortfolioKPISnapshot[]
+  underwrites      Underwrite[]
 }
 
 // Source attribution for individual company data fields
@@ -424,4 +425,48 @@ model HuntSession {
   results     String   // JSON: HuntResult[] or ScoutResult[]
   resultCount Int      @default(0)
   createdAt   DateTime @default(now())
+}
+
+// ── Underwrite (Pre-LOI opportunity analysis) ─────────────────────────────────
+
+model Underwrite {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  status      String   @default("SCREENING") // SCREENING | IN_ANALYSIS | READY_FOR_IC | PASSED
+  analystName String?
+  shareToken  String   @unique @default(cuid())
+
+  // KPI scorecard inputs (all nullable — entered as deal data comes in)
+  arrGrowth        Float?
+  ndr              Float?
+  gdr              Float?
+  logoRetention    Float?
+  grossMargin      Float?
+  ruleOf40         Float?
+  burnMultiple1yr  Float?
+  burnMultipleLtd  Float?
+
+  // Analysis sections (plain text / markdown)
+  arrNotes         String?
+  retentionNotes   String?
+  financialNotes   String?
+  memoMerits       String?
+  memoRisks        String?
+  memoNarrative    String?
+  recommendation   String? // INVEST | PASS | WATCH
+
+  comments  UnderwriteComment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UnderwriteComment {
+  id           String     @id @default(cuid())
+  underwriteId String
+  underwrite   Underwrite @relation(fields: [underwriteId], references: [id], onDelete: Cascade)
+  section      String     // scorecard | arr | retention | financials | memo | general
+  authorName   String
+  content      String
+  createdAt    DateTime   @default(now())
 }
