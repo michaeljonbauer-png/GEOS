@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { AlertCircle, ExternalLink, ThumbsDown, Building2, RotateCcw, Target, Loader2, Search, ArrowRight, History, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertCircle, ExternalLink, ThumbsDown, Building2, RotateCcw, Target, Loader2, Search, ArrowRight, History, Trash2, ChevronDown, ChevronUp, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { ScoreBadge, MetricRow, CompanyPreviewModal, type CompanyPreviewData } from "./shared";
@@ -13,6 +13,7 @@ interface ScoutResult {
   founded: number | null; stage: string | null; totalFundingM: number | null;
   employees: number | null; arrEstimate: number | null; arrGrowth: number | null;
   nrrEstimate?: number | null; grossMargin?: number | null;
+  acquired?: boolean; acquiredBy?: string | null;
   fitScore: number | null; fitRationale: string | null; source: string | null;
   founderName?: string | null; founderTitle?: string | null;
   founderLinkedIn?: string | null; founderEmail?: string | null;
@@ -69,6 +70,33 @@ function ScoutCard({ result, onOpenDetail, onAdd, onDismiss, adding, dismissed, 
           <h3 className="font-medium text-slate-500 text-sm">{result.inputName}</h3>
         </div>
         <p className="text-xs text-slate-400">{result.error}</p>
+      </div>
+    );
+  }
+
+  if (result.acquired) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex flex-col opacity-80">
+        <div className="flex items-start gap-2 mb-2">
+          <Ban size={15} className="text-red-500 mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold text-red-800 truncate text-sm">{result.name}</h3>
+            <p className="text-xs text-red-600 mt-0.5">
+              Acquired{result.acquiredBy ? ` by ${result.acquiredBy}` : ""} — not an investable opportunity
+            </p>
+          </div>
+        </div>
+        {result.description && <p className="text-xs text-red-700/70 leading-relaxed mb-3 line-clamp-2">{result.description}</p>}
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" className="px-2.5 text-slate-400 hover:bg-slate-50" onClick={onDismiss} title="Dismiss">
+            <ThumbsDown size={12} />
+          </Button>
+          {result.website && (
+            <a href={result.website} target="_blank" rel="noopener noreferrer">
+              <Button size="sm" variant="outline" className="px-2.5"><ExternalLink size={12} /></Button>
+            </a>
+          )}
+        </div>
       </div>
     );
   }

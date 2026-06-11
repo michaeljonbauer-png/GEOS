@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Sparkles, ThumbsDown, ExternalLink, Radar, Send, Building2,
-  RotateCcw, ChevronDown, ChevronUp, Search, History, Trash2, Clock, ArrowRight,
+  RotateCcw, ChevronDown, ChevronUp, Search, History, Trash2, Clock, ArrowRight, Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -16,6 +16,7 @@ interface HuntResult {
   founded: number | null; stage: string | null; totalFundingM: number | null;
   employees: number | null; arrEstimate: number | null; arrGrowth: number | null;
   nrrEstimate?: number | null; grossMargin?: number | null;
+  acquired?: boolean; acquiredBy?: string | null; acquisitionUncertain?: boolean;
   huntRationale: string | null; huntScore: number | null; source: string | null;
   founderName?: string | null; founderTitle?: string | null;
   founderLinkedIn?: string | null; founderEmail?: string | null;
@@ -69,6 +70,24 @@ function HuntCard({ result, onOpenDetail, onAdd, onDismiss, onScout, adding, dis
     );
   }
   if (dismissed) return null;
+
+  if (result.acquired) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-2 opacity-80">
+        <Ban size={15} className="text-red-500 mt-0.5 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-red-800 truncate">{result.name}</p>
+          <p className="text-xs text-red-600 mt-0.5">
+            Acquired{result.acquiredBy ? ` by ${result.acquiredBy}` : ""} — not an investable opportunity
+          </p>
+        </div>
+        <Button size="sm" variant="ghost" className="px-1.5 text-slate-400 shrink-0" onClick={onDismiss} title="Dismiss">
+          <ThumbsDown size={12} />
+        </Button>
+      </div>
+    );
+  }
+
   const descLong = (result.description ?? "").length > 180;
 
   return (

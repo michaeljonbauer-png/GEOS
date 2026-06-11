@@ -97,10 +97,17 @@ SKIP — already in pipeline:
 ${existingNames}
 
 Find exactly ${Math.min(count, 10)} companies that best match the hunt query. Requirements:
-- EXCLUDE: acquired companies, PE-owned/controlled, publicly traded, roll-up subsidiaries
+- STRICT EXCLUDE (do not include even if it seems like a great fit):
+  • Acquired companies — even recent acquisitions (2023–2025). Examples of recently acquired companies to NEVER include: Duro Labs (acquired by Altium 2025), Flashtract (acquired by Trimble 2024). If you have ANY doubt about whether a company is still independent, exclude it.
+  • PE-owned, sponsor-controlled, or roll-up subsidiaries
+  • Publicly traded companies (NYSE, NASDAQ, etc.)
+  • Subsidiaries or divisions of larger companies
+- If a company was acquired AFTER your knowledge cutoff, you may not know — err on the side of caution and flag uncertain status
 - Be specific and concrete — name real companies that exist, not hypothetical examples
 - Apply ARR estimation rules: MAX(employees×$250K, totalFunding÷5, stage floor)
   Stage floors: Seed $0.5M | A $3M | B $12M | C $25M | D+ $50M
+
+For each company, set "acquired" to true and fill "acquiredBy" if you know or strongly suspect the company has been acquired. Set "acquisitionUncertain" to true if you are unsure of its current independent status.
 
 Return ONLY a JSON array:
 [{
@@ -120,6 +127,7 @@ Return ONLY a JSON array:
   "grossMargin": 72,
   "acquired": false,
   "acquiredBy": null,
+  "acquisitionUncertain": false,
   "huntRationale": "2-3 sentences: why this company matches the hunt query specifically",
   "huntScore": 88,
   "founderName": "Jane Smith",
@@ -147,15 +155,15 @@ Return ONLY a JSON array:
       stage?: string; totalFundingM?: number | null; employees?: number | null;
       arrEstimate?: number | null; arrGrowth?: number | null;
       nrrEstimate?: number | null; grossMargin?: number | null;
-      acquired?: boolean; acquiredBy?: string | null;
+      acquired?: boolean; acquiredBy?: string | null; acquisitionUncertain?: boolean;
       huntRationale?: string; huntScore?: number | null; source?: string;
     };
 
     let results: HuntResult[] = JSON.parse(match[0]);
 
-    // Filter acquired and apply ARR floors server-side
+    // Filter acquired (including uncertain) and apply ARR floors server-side
     results = results
-      .filter(r => !r.acquired)
+      .filter(r => !r.acquired && !r.acquisitionUncertain)
       .map(r => {
         const floor = arrFloor(r.totalFundingM ?? null, r.employees ?? null);
         if (floor != null && (r.arrEstimate == null || r.arrEstimate < floor)) {

@@ -50,7 +50,13 @@ export async function POST(req: NextRequest) {
 
 Research this company: "${company.trim()}"
 
-Use web search to find current information about: what they do, recent funding, employee count, and growth signals.
+CRITICAL — check acquisition status FIRST via web search before anything else:
+- Search for "[company name] acquired" and "[company name] acquisition"
+- If the company has been acquired, set "acquired": true and "acquiredBy" to the acquirer name
+- This investor cannot invest in acquired companies — accurate acquisition status is the most important field
+- Recent examples of acquired companies: Duro Labs (acquired by Altium 2025), Flashtract (acquired by Trimble 2024)
+
+Use web search to find current information about: acquisition status, what they do, recent funding, employee count, and growth signals.
 
 INVESTOR THESIS — score this company against these criteria:
 ${thesisSummary || "No specific thesis criteria set."}
@@ -72,7 +78,7 @@ Return ONLY a single JSON object (no markdown, no explanation):
   "acquired": false,
   "acquiredBy": null,
   "fitScore": 82,
-  "fitRationale": "2-3 sentences: how well this fits the thesis and why",
+  "fitRationale": "2-3 sentences: how well this fits the thesis and why — if acquired, explain that this is no longer an investable opportunity",
   "founderName": "Jane Smith",
   "founderTitle": "Co-Founder & CEO",
   "founderLinkedIn": "https://linkedin.com/in/janesmith",
