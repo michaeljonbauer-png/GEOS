@@ -266,8 +266,8 @@ interface YrData {
   mbWaiver: number; teamWaiver: number; feeWaiver: number;
   netFees: number;
   totalComp: number;
-  benefits: number; empTaxes: number; totalHCE: number;
-  overhead: number; houseNetPL: number;
+  benefits: number; empTaxes: number; overhead: number;
+  totalExpenses: number; houseNetPL: number;
 }
 
 function computeAPL(d: APLInputs, comp: CompGrid): YrData[] {
@@ -306,15 +306,16 @@ function computeAPL(d: APLInputs, comp: CompGrid): YrData[] {
 
     const benefits  = Math.round(totalComp * (d.benefitsRate / 100));
     const empTaxes  = Math.round(totalComp * (d.empTaxRate / 100));
-    const totalHCE  = totalComp + benefits + empTaxes;
     const overhead  = Math.round(totalComp * (d.overheadRate / 100));
-    const houseNetPL = netFees - totalHCE - overhead;
+    const totalExpenses = totalComp + benefits + empTaxes + overhead;
+    const houseNetPL = netFees - totalExpenses;
 
     return {
       yr, calYear, activeFund,
       feeF1, feeF2, feeF3, grossFees,
       mbWaiver, teamWaiver, feeWaiver, netFees,
-      totalComp, benefits, empTaxes, totalHCE, overhead, houseNetPL,
+      totalComp, benefits, empTaxes, overhead,
+      totalExpenses, houseNetPL,
     };
   });
 }
@@ -375,7 +376,7 @@ function GPPnL() {
     label: string;
     sublabel?: string;
     get: (y: YrData) => number;
-    style: "section" | "revenue" | "deduct" | "subtotal-rev" | "comp" | "expense" | "subtotal-hce" | "overhead" | "bottom";
+    style: "section" | "revenue" | "deduct" | "subtotal-rev" | "comp" | "expense" | "subtotal-hce" | "bottom";
     note?: string;
     onlyWhen?: (y: YrData) => boolean;
     editId?: string;   // when set, year cells are directly editable (bound to comp grid)
@@ -404,19 +405,16 @@ function GPPnL() {
     // ── Headcount Compensation (editable — click any cell) ─────────────────────
     { id: "s-comp",   label: "HEADCOUNT COMPENSATION",                      get: () => 0,              style: "section" },
     ...compRows,
-    { id: "totComp",  label: "Total Compensation",                           get: y => y.totalComp,     style: "subtotal-rev", note: "Cash comp only · carry/DAW allocated separately" },
+    { id: "totComp",  label: "Total HC Salary / Cash Comp",                  get: y => y.totalComp,     style: "subtotal-rev", note: "Cash comp only · carry/DAW allocated separately" },
 
-    // ── Headcount Expenses ────────────────────────────────────────────────────
-    { id: "benefits", label: "Benefits",     sublabel: `${d.benefitsRate}% of comp`,  get: y => y.benefits,  style: "expense", note: "Health, dental, 401k match, etc." },
-    { id: "empTax",   label: "Employer Taxes", sublabel: `${d.empTaxRate}% of comp`, get: y => y.empTaxes,  style: "expense", note: "FICA, FUTA, SUI" },
-    { id: "totHCE",   label: "Total Headcount Expenses",                     get: y => y.totalHCE,     style: "subtotal-hce" },
-
-    // ── Overhead ──────────────────────────────────────────────────────────────
-    { id: "s-oh",     label: "OVERHEAD",                                     get: () => 0,              style: "section" },
-    { id: "oh",       label: "General & Administrative", sublabel: `${d.overheadRate}% of comp`, get: y => y.overhead, style: "overhead", note: "Rent, tech, travel, legal, fund admin" },
+    // ── Expenses (benefits, taxes, G&A) ───────────────────────────────────────
+    { id: "benefits", label: "Benefits",           sublabel: `${d.benefitsRate}% of comp`,  get: y => y.benefits,  style: "expense", note: "Health, dental, 401k match, etc." },
+    { id: "empTax",   label: "Employer Taxes",     sublabel: `${d.empTaxRate}% of comp`,    get: y => y.empTaxes,  style: "expense", note: "FICA, FUTA, SUI" },
+    { id: "oh",       label: "General & Administrative", sublabel: `${d.overheadRate}% of comp`, get: y => y.overhead, style: "expense", note: "Rent, tech, travel, legal, fund admin" },
+    { id: "totExp",   label: "Total Expenses",                               get: y => y.totalExpenses, style: "subtotal-hce" },
 
     // ── Bottom line ───────────────────────────────────────────────────────────
-    { id: "house",    label: "MGMT FEE TO THE HOUSE",                       get: y => y.houseNetPL,    style: "bottom",       note: "Net cash fees less all operating costs" },
+    { id: "house",    label: "MGMT FEE TO THE HOUSE",                       get: y => y.houseNetPL,    style: "bottom",       note: "Net cash fees less total expenses" },
   ];
 
   const colStyle = (y: YrData) =>
@@ -450,7 +448,6 @@ function GPPnL() {
       row.style === "bottom"       ? (v >= 0 ? "text-emerald-700 font-black text-sm" : "text-red-600 font-black text-sm") :
       row.style === "subtotal-rev" ? "font-bold text-slate-800" :
       row.style === "subtotal-hce" ? "font-bold text-amber-800" :
-      row.style === "overhead"     ? "text-slate-600" :
       "text-slate-700";
     return (
       <td key={y.yr} className={`px-3 py-1.5 text-right tabular-nums text-xs ${textCls} ${colStyle(y)}`}>
@@ -694,7 +691,6 @@ function GPPnL() {
                 isBottom   ? "sticky left-0 z-10 bg-white px-4 py-2.5 font-black text-slate-900 uppercase tracking-wide text-[11px] border-t-2 border-slate-800" :
                 isSubtotal ? "sticky left-0 z-10 bg-slate-50 px-4 py-2 font-bold text-slate-800 border-t border-slate-200" :
                 row.style === "expense" ? "sticky left-0 z-10 bg-white px-4 py-1.5 text-slate-500 pl-8" :
-                row.style === "overhead" ? "sticky left-0 z-10 bg-white px-4 py-1.5 text-slate-600" :
                 "sticky left-0 z-10 bg-white px-4 py-1.5 text-slate-700";
               return (
                 <tr key={row.id} className={`border-t border-slate-100 ${rowBg} ${isBottom ? "border-t-2 border-slate-800" : ""}`}>
@@ -768,7 +764,8 @@ function GPPnL() {
       <p className="text-[11px] text-slate-400">
         All figures in $K. Compensation cells are directly editable — click any salary in the table to override it.
         Fee step-down: 75% / 50% / 25% of committed-period rate in years 1–3 after each fund's deployment ends.
-        Partner joins Yr 5; Principal &amp; Analyst join Yr 4 — earlier years are blank. Benefits, employer taxes and overhead are toggleable above.
+        Partner joins Yr 5; Principal &amp; Analyst join Yr 4 — earlier years are blank.
+        Total Expenses = Total HC Salary/Cash Comp + Benefits + Employer Taxes + G&amp;A. Mgmt Fee to the House = Net Cash Mgmt Fees − Total Expenses.
         Both MB and team fund their GP commits via waived fees ({fp(d.feeWaiverPct)}). DAW figures are total potential carry, not present value.
       </p>
     </div>
