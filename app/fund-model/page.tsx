@@ -63,10 +63,20 @@ function runModel(inp: Inputs): Outputs {
   const feeCommittedYears = Math.min(5, Math.ceil(deployYears));
   const feeDeployedYears  = fundLife - feeCommittedYears;
 
-  // Closed-form: investedCapital*(1 + r*cohortYearSum/deployYears) = fundSize*(1 - feeCommittedYears*r)
-  const cohortYearSum = Array.from({ length: deployYears }, (_, i) => holdYears + (deployYears - i)).reduce((a, b) => a + b, 0);
-  const investedCapital = fundSize * (1 - feeCommittedYears * r) / (1 + r * cohortYearSum / Math.max(1, deployYears));
+  // Post-deployment fee multiplier: sum of (remaining cohort fraction) over each post-deployment year.
+  // Cohort c exits at end of yr (c+holdYears); that slice leaves the fee basis from start of yr (c+holdYears+1).
+  let postFeeMultiplier = 0;
+  for (let yr = feeCommittedYears + 1; yr <= fundLife; yr++) {
+    const exitedCohorts = Math.max(0, Math.min(deployYears, yr - holdYears - 1));
+    const remaining = deployYears - exitedCohorts;
+    if (remaining <= 0) break;
+    postFeeMultiplier += remaining / deployYears;
+  }
+
+  // Solve: fundSize = investedCapital + committedFees + r*investedCapital*postFeeMultiplier
+  // => investedCapital = fundSize*(1 - feeCommittedYears*r) / (1 + r*postFeeMultiplier)
   const feeCommitted    = fundSize * r;
+  const investedCapital = fundSize * (1 - feeCommittedYears * r) / (1 + r * postFeeMultiplier);
 
   const recycledCapital = investedCapital * (recycleRate / 100);
   const totalDeployed   = investedCapital + recycledCapital;
@@ -75,16 +85,7 @@ function runModel(inp: Inputs): Outputs {
   const lpCapital  = fundSize;
   const fundProfit = grossProceeds - lpCapital;
   const gpCarry    = fundProfit * (carryRate / 100);
-  // Post-deployment: fee base declines as cohorts exit. Cohort c exits at end of yr (c + holdYears);
-  // from start of yr (c + holdYears + 1) that slice is no longer in the fee base.
-  let postDeployFees = 0;
-  for (let yr = feeCommittedYears + 1; yr <= fundLife; yr++) {
-    const exitedCohorts = Math.max(0, Math.min(deployYears, yr - holdYears - 1));
-    const remaining = deployYears - exitedCohorts;
-    if (remaining <= 0) break;
-    postDeployFees += r * investedCapital * (remaining / deployYears);
-  }
-  const totalMgmtFees = feeCommitted * feeCommittedYears + postDeployFees;
+  const totalMgmtFees = feeCommitted * feeCommittedYears + r * investedCapital * postFeeMultiplier;
   const gpTotalEconomics = gpCarry + totalMgmtFees;
   const lpNetProceeds = grossProceeds - gpCarry;
   const lpNetMoic = lpNetProceeds / fundSize;
