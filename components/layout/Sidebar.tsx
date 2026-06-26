@@ -15,31 +15,26 @@ import {
   Briefcase,
   Users,
   Sparkles,
-  Scale,
   Calculator,
-  ClipboardList,
   Menu,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/sourcing", label: "Sourcing", icon: Sparkles },
-  { href: "/companies", label: "Companies", icon: Building2 },
-  { href: "/pipeline", label: "Pipeline", icon: GitMerge },
-  { href: "/comps", label: "Comps", icon: Scale },
-  { href: "/outreach", label: "Outreach", icon: Send },
-  { href: "/crm", label: "Activity", icon: ActivitySquare },
+const sourcingSubItems = [
+  { href: "/sourcing",  label: "Identification", icon: Sparkles },
+  { href: "/crm",       label: "Activity",        icon: ActivitySquare },
+  { href: "/outreach",  label: "Outreach",         icon: Send },
+  { href: "/pipeline",  label: "Pipeline",         icon: GitMerge },
 ];
 
-const dealItems = [
-  { href: "/underwrite", label: "Underwrite", icon: ClipboardList },
-  { href: "/live-deal", label: "Live Deal", icon: Briefcase },
-  { href: "/portfolio", label: "Portfolio", icon: BarChart3 },
-  { href: "/lp-reporting", label: "LP Communications", icon: Users },
-  { href: "/fund-model", label: "GP Fund Model", icon: Calculator },
+const mainItems = [
+  { href: "/companies",    label: "Companies",              icon: Building2  },
+  { href: "/live-deal",    label: "Live Deal / Underwrite", icon: Briefcase  },
+  { href: "/portfolio",    label: "Portfolio / Investments",icon: BarChart3  },
+  { href: "/lp-reporting", label: "LP Comms / Reporting",   icon: Users      },
+  { href: "/fund-model",   label: "GP Fund Model",          icon: Calculator },
 ];
 
 export default function Sidebar() {
@@ -48,7 +43,7 @@ export default function Sidebar() {
 
   const close = () => setOpen(false);
 
-  const navLink = (href: string, label: string, Icon: LucideIcon) => {
+  const navLink = (href: string, label: string, Icon: LucideIcon, sub = false) => {
     const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
     return (
       <Link
@@ -56,13 +51,14 @@ export default function Sidebar() {
         href={href}
         onClick={close}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+          "flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors",
+          sub ? "px-3 pl-8" : "px-3",
           isActive
             ? "bg-blue-600 text-white"
             : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
         )}
       >
-        <Icon size={17} />
+        <Icon size={16} />
         {label}
       </Link>
     );
@@ -99,7 +95,6 @@ export default function Sidebar() {
       <aside
         className={cn(
           "flex h-screen w-64 flex-col bg-slate-900 text-slate-100 shrink-0 transition-transform duration-200 ease-in-out",
-          // Mobile: fixed overlay, slides in/out
           "fixed inset-y-0 left-0 z-50 lg:relative lg:translate-x-0 lg:z-auto",
           open ? "translate-x-0" : "-translate-x-full"
         )}
@@ -115,7 +110,6 @@ export default function Sidebar() {
               Growth Equity OS
             </div>
           </div>
-          {/* Close button — mobile only */}
           <button
             onClick={close}
             className="text-slate-500 hover:text-slate-300 lg:hidden"
@@ -126,22 +120,42 @@ export default function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {navItems.map(({ href, label, icon: Icon }) => navLink(href, label, Icon))}
+        <nav className="flex-1 px-3 py-4 overflow-y-auto">
 
-          <div className="pt-4 pb-1">
-            <p className="px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
-              Deals &amp; Portfolio
+          {/* Dashboard */}
+          <div className="space-y-0.5">
+            {navLink("/", "Dashboard", LayoutDashboard)}
+          </div>
+
+          {/* Sourcing section */}
+          <div className="mt-5 mb-1">
+            <p className="px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              Sourcing
             </p>
           </div>
-          {dealItems.map(({ href, label, icon: Icon }) => navLink(href, label, Icon))}
+          <div className="space-y-0.5">
+            {sourcingSubItems.map(({ href, label, icon: Icon }) =>
+              navLink(href, label, Icon, true)
+            )}
+          </div>
 
-          <div className="pt-4 pb-1">
-            <p className="px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+          {/* Main standalone items */}
+          <div className="mt-5 space-y-0.5">
+            {mainItems.map(({ href, label, icon: Icon }) =>
+              navLink(href, label, Icon)
+            )}
+          </div>
+
+          {/* Settings */}
+          <div className="mt-5 mb-1">
+            <p className="px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
               Settings
             </p>
           </div>
-          {navLink("/settings", "Settings", Settings)}
+          <div className="space-y-0.5">
+            {navLink("/settings", "Settings", Settings)}
+          </div>
+
         </nav>
 
         {/* Footer */}
