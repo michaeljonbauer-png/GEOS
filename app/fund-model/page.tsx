@@ -177,359 +177,552 @@ function Slider({ label, value, min, max, step, onChange, display, sub }: {
   );
 }
 
-// ─── GP P&L Types ─────────────────────────────────────────────────────────────
+// ─── Annual GP P&L — types & compute ─────────────────────────────────────────
 
-interface FundCol {
-  label: string;
-  year: number;
-  fundSizeM: number;
-  mbCashComp: number;
-  mbDawEarlyStage: number;
-  mbDawOtherFunds: number;
+interface APLInputs {
+  // Fund structure
+  f1SizeM: number; f2SizeM: number; f3SizeM: number;
+  launchYear: number;        // Year 1 calendar year
+  deployYrs: number;         // years per fund (assume equal)
+  mgmtFeeRate: number;       // % e.g. 2.0
+  dawRate: number;           // carry % e.g. 20
+  gpCommitPct: number;       // % e.g. 1.0
+  feeWaiverPct: number;      // % of GP commit waived e.g. 80
+  // Team compensation ($K base, growth applied annually)
+  mbComp_f1: number; mbComp_f2: number; mbComp_f3: number;
+  vpBase: number;            // VP — active years 1-3
+  principalBase: number;     // Principal (fmr VP) — active yr 4+
+  assocBase: number;         // Associate — active years 1-3
+  vpPromBase: number;        // VP promoted (fmr Assoc) — active yr 4+
+  newAssocBase: number;      // New Associate — active yr 4+
+  analystBase: number;       // Analyst — active yr 4+
+  compGrowth: number;        // % annual raise
+  // Expense rates
+  benefitsRate: number;      // % of comp (default 10)
+  empTaxRate: number;        // % of comp (default 8)
+  overheadRate: number;      // % of comp (default 20)
+  // DAW allocations ($K per fund)
+  mbDaw_f1: number; mbDaw_f2: number; mbDaw_f3: number;
+  mbDawOther_f1: number; mbDawOther_f2: number; mbDawOther_f3: number;
   upfrontDaw: number;
-  otherTeamHC: number;
-  teamDaw: number;
+  teamDaw_f1: number; teamDaw_f2: number; teamDaw_f3: number;
 }
 
-interface GlobalPL {
-  mgmtFeeRate: number;
-  dawRate: number;
-  deployYears: number;
-  gpCommitPct: number;
-  feeWaiverPct: number;
-  priorFeeRetainPct: number;
-}
-
-interface FundPL {
-  fundSizeK: number;
-  mgmtFeeK: number;
-  totalDawK: number;
-  mbFeeWaiverAnnualK: number;
-  totalCashWaiverK: number;
-  mbDawEarlyStageK: number;
-  mbDawOtherFundsK: number;
-  upfrontDawK: number;
-  mbDawTotalK: number;
-  gpCommitK: number;
-  gpFeeWaiverK: number;
-  gpOopK: number;
-  totalHcK: number;
-  priorFeeK: number;
-  mgmtFeePostHcK: number;
-  remainingDawK: number;
-}
-
-const FUND_DEFAULTS: FundCol[] = [
-  { label: "Fund 1", year: 2027, fundSizeM: 100, mbCashComp: 700,  mbDawEarlyStage: 7000,  mbDawOtherFunds: 2000, upfrontDaw: 2000, otherTeamHC: 700,  teamDaw: 850  },
-  { label: "Fund 2", year: 2030, fundSizeM: 150, mbCashComp: 850,  mbDawEarlyStage: 9000,  mbDawOtherFunds: 3000, upfrontDaw: 0,    otherTeamHC: 1225, teamDaw: 3000 },
-  { label: "Fund 3", year: 2033, fundSizeM: 225, mbCashComp: 1000, mbDawEarlyStage: 11000, mbDawOtherFunds: 4000, upfrontDaw: 0,    otherTeamHC: 2144, teamDaw: 5000 },
-];
-
-const GLOBAL_PL_DEFAULTS: GlobalPL = {
-  mgmtFeeRate: 2.0,
-  dawRate: 20.0,
-  deployYears: 3,
-  gpCommitPct: 1.0,
-  feeWaiverPct: 80,
-  priorFeeRetainPct: 50,
+const APL_DEF: APLInputs = {
+  f1SizeM: 100, f2SizeM: 150, f3SizeM: 225,
+  launchYear: 2027, deployYrs: 3,
+  mgmtFeeRate: 2.0, dawRate: 20, gpCommitPct: 1.0, feeWaiverPct: 80,
+  mbComp_f1: 700, mbComp_f2: 850, mbComp_f3: 1000,
+  vpBase: 260, principalBase: 350, assocBase: 165,
+  vpPromBase: 250, newAssocBase: 175, analystBase: 130,
+  compGrowth: 3,
+  benefitsRate: 10, empTaxRate: 8, overheadRate: 20,
+  mbDaw_f1: 7000, mbDaw_f2: 9000, mbDaw_f3: 11000,
+  mbDawOther_f1: 2000, mbDawOther_f2: 3000, mbDawOther_f3: 4000,
+  upfrontDaw: 2000,
+  teamDaw_f1: 850, teamDaw_f2: 3000, teamDaw_f3: 5000,
 };
 
-function computePL(col: FundCol, g: GlobalPL, priorMgmtFeeK: number): FundPL {
-  const fundSizeK = col.fundSizeM * 1000;
-  const mgmtFeeK = fundSizeK * (g.mgmtFeeRate / 100);
-  const totalDawK = fundSizeK * (g.dawRate / 100);
-
-  const gpCommitK = fundSizeK * (g.gpCommitPct / 100);
-  const gpFeeWaiverK = Math.round(gpCommitK * (g.feeWaiverPct / 100));
-  const gpOopK = gpCommitK - gpFeeWaiverK;
-  const mbFeeWaiverAnnualK = gpFeeWaiverK / Math.max(1, g.deployYears);
-
-  const mbDawTotalK = col.upfrontDaw + col.mbDawEarlyStage + col.mbDawOtherFunds;
-
-  const totalHcK = col.mbCashComp + col.otherTeamHC;
-  const priorFeeK = priorMgmtFeeK * (g.priorFeeRetainPct / 100);
-  const mgmtFeePostHcK = mgmtFeeK + priorFeeK - totalHcK;
-
-  const remainingDawK = totalDawK - col.mbDawEarlyStage - col.teamDaw;
-
-  return {
-    fundSizeK, mgmtFeeK, totalDawK,
-    mbFeeWaiverAnnualK,
-    totalCashWaiverK: col.mbCashComp + mbFeeWaiverAnnualK,
-    mbDawEarlyStageK: col.mbDawEarlyStage,
-    mbDawOtherFundsK: col.mbDawOtherFunds,
-    upfrontDawK: col.upfrontDaw,
-    mbDawTotalK,
-    gpCommitK, gpFeeWaiverK, gpOopK,
-    totalHcK, priorFeeK, mgmtFeePostHcK,
-    remainingDawK,
-  };
+interface YrData {
+  yr: number; calYear: number; activeFund: number;
+  feeF1: number; feeF2: number; feeF3: number;
+  grossFees: number; feeWaiver: number; netFees: number;
+  mbComp: number;
+  vpComp: number; principalComp: number;
+  assocComp: number; vpPromComp: number; newAssocComp: number; analystComp: number;
+  teamComp: number;   // non-MB only
+  totalComp: number;
+  benefits: number; empTaxes: number; totalHCE: number;
+  overhead: number; houseNetPL: number;
 }
 
-// ─── GP P&L UI helpers ────────────────────────────────────────────────────────
+function computeAPL(d: APLInputs): YrData[] {
+  const D = d.deployYrs;
+  const g = d.compGrowth / 100;
+  const STEP = [1.0, 0.75, 0.50, 0.25, 0.0];
+  const fullFee = (sizeM: number) => Math.round(sizeM * 1000 * (d.mgmtFeeRate / 100));
+  const f1F = fullFee(d.f1SizeM), f2F = fullFee(d.f2SizeM), f3F = fullFee(d.f3SizeM);
 
-const fk = (v: number) => v === 0 ? "—" : `$${Math.round(v).toLocaleString()}`;
-const fp = (v: number) => `${v.toFixed(1)}%`;
+  // Annual GP commit fee waiver per fund's deployment
+  const waiverAnn = (sizeM: number) =>
+    Math.round(sizeM * 1000 * (d.gpCommitPct / 100) * (d.feeWaiverPct / 100) / D);
+  const w1 = waiverAnn(d.f1SizeM), w2 = waiverAnn(d.f2SizeM), w3 = waiverAnn(d.f3SizeM);
 
-function NumCell({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const step = (full: number, offset: number) => Math.round(full * STEP[Math.min(offset, 4)]);
+  const grow = (base: number, startYr: number, yr: number) =>
+    Math.round(base * Math.pow(1 + g, yr - startYr));
+
+  return Array.from({ length: 9 }, (_, i) => {
+    const yr = i + 1;
+    const calYear = d.launchYear + i;
+    const activeFund = yr <= D ? 1 : yr <= D * 2 ? 2 : 3;
+
+    // Fee revenue — step down after each fund's deployment period
+    const feeF1 = yr <= D ? f1F : step(f1F, yr - D - 1);
+    const feeF2 = yr < D + 1 ? 0 : yr <= D * 2 ? f2F : step(f2F, yr - D * 2 - 1);
+    const feeF3 = yr < D * 2 + 1 ? 0 : f3F; // fund 3 still deploying in yrs 7-9
+    const grossFees = feeF1 + feeF2 + feeF3;
+
+    // Fee waiver (non-cash reduction) during each fund's deployment
+    const feeWaiver = yr <= D ? w1 : yr <= D * 2 ? w2 : w3;
+    const netFees = grossFees - feeWaiver;
+
+    // MB flat within each fund period
+    const mbComp = activeFund === 1 ? d.mbComp_f1 : activeFund === 2 ? d.mbComp_f2 : d.mbComp_f3;
+
+    // Team — roles transition at year D+1
+    const isF1 = yr <= D;
+    const vpComp       = isF1 ? grow(d.vpBase, 1, yr) : 0;
+    const principalComp = !isF1 ? grow(d.principalBase, D + 1, yr) : 0;
+    const assocComp    = isF1 ? grow(d.assocBase, 1, yr) : 0;
+    const vpPromComp   = !isF1 ? grow(d.vpPromBase, D + 1, yr) : 0;
+    const newAssocComp = !isF1 ? grow(d.newAssocBase, D + 1, yr) : 0;
+    const analystComp  = !isF1 ? grow(d.analystBase, D + 1, yr) : 0;
+
+    const teamComp = vpComp + principalComp + assocComp + vpPromComp + newAssocComp + analystComp;
+    const totalComp = mbComp + teamComp;
+
+    const benefits  = Math.round(totalComp * (d.benefitsRate / 100));
+    const empTaxes  = Math.round(totalComp * (d.empTaxRate / 100));
+    const totalHCE  = totalComp + benefits + empTaxes;
+    const overhead  = Math.round(totalComp * (d.overheadRate / 100));
+    const houseNetPL = netFees - totalHCE - overhead;
+
+    return {
+      yr, calYear, activeFund,
+      feeF1, feeF2, feeF3, grossFees, feeWaiver, netFees,
+      mbComp, vpComp, principalComp, assocComp, vpPromComp, newAssocComp, analystComp,
+      teamComp, totalComp, benefits, empTaxes, totalHCE, overhead, houseNetPL,
+    };
+  });
+}
+
+// ─── Annual GP P&L — helper render utils ──────────────────────────────────────
+
+const fk  = (v: number) => Math.abs(v) < 0.5 ? "—" : v < 0
+  ? `(${Math.abs(Math.round(v)).toLocaleString()})`
+  : `${Math.round(v).toLocaleString()}`;
+const fp  = (v: number) => `${v.toFixed(1)}%`;
+
+function InlineInput({ value, onChange, width = "w-20" }: {
+  value: number; onChange: (v: number) => void; width?: string;
+}) {
   return (
-    <td className="px-3 py-1.5 text-right">
-      <input
-        type="number"
-        value={value}
-        onChange={e => onChange(Number(e.target.value) || 0)}
-        className="w-24 text-right tabular-nums text-sm bg-blue-50 border border-blue-200 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:bg-white"
-      />
-    </td>
+    <input type="number" value={value}
+      onChange={e => onChange(Number(e.target.value) || 0)}
+      className={`${width} text-right tabular-nums text-xs bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:bg-white`}
+    />
   );
 }
 
-// ─── GP P&L Component ─────────────────────────────────────────────────────────
+// ─── Annual GP P&L — component ────────────────────────────────────────────────
 
 function GPPnL() {
-  const [funds, setFunds] = useState<FundCol[]>(FUND_DEFAULTS);
-  const [g, setG] = useState<GlobalPL>(GLOBAL_PL_DEFAULTS);
-  const [showGlobal, setShowGlobal] = useState(false);
+  const [d, setD] = useState<APLInputs>(APL_DEF);
+  const upd = <K extends keyof APLInputs>(k: K, v: APLInputs[K]) => setD(p => ({ ...p, [k]: v }));
+  const [showFund, setShowFund] = useState(false);
+  const [showTeam, setShowTeam] = useState(false);
+  const [showDaw,  setShowDaw]  = useState(false);
 
-  const setFund = (i: number, field: keyof FundCol, val: number | string) =>
-    setFunds(prev => prev.map((f, idx) => idx === i ? { ...f, [field]: val } : f));
-  const setGlobal = (field: keyof GlobalPL, val: number) =>
-    setG(prev => ({ ...prev, [field]: val }));
+  const yrs = useMemo(() => computeAPL(d), [d]);
+  const sum  = (get: (y: YrData) => number) => yrs.reduce((s, y) => s + get(y), 0);
 
-  const pls = useMemo(() => {
-    return funds.map((col, i) => {
-      const priorFeeK = i > 0
-        ? funds[i - 1].fundSizeM * 1000 * (g.mgmtFeeRate / 100)
-        : 0;
-      return computePL(col, g, priorFeeK);
-    });
-  }, [funds, g]);
+  // DAW pools
+  const dawPool = (sizeM: number) => Math.round(sizeM * 1000 * (d.dawRate / 100));
+  const dp1 = dawPool(d.f1SizeM), dp2 = dawPool(d.f2SizeM), dp3 = dawPool(d.f3SizeM);
+  const mbDawTotal = (d.upfrontDaw + d.mbDaw_f1 + d.mbDawOther_f1) +
+                     (d.mbDaw_f2 + d.mbDawOther_f2) + (d.mbDaw_f3 + d.mbDawOther_f3);
+  const teamDawTotal = d.teamDaw_f1 + d.teamDaw_f2 + d.teamDaw_f3;
+  const houseRemaining = (dp1 - d.mbDaw_f1 - d.teamDaw_f1) +
+                         (dp2 - d.mbDaw_f2 - d.teamDaw_f2) +
+                         (dp3 - d.mbDaw_f3 - d.teamDaw_f3);
 
-  type RowDef =
-    | { type: "section"; label: string }
-    | { type: "input-num"; label: string; note: string; field: keyof FundCol }
-    | { type: "input-year"; label: string; note: string; field: keyof FundCol }
-    | { type: "calc"; label: string; note: string; get: (pl: FundPL, col: FundCol) => number; bold?: boolean; color?: string }
-    | { type: "sub"; label: string; note: string; get: (pl: FundPL, col: FundCol) => number; color?: string };
-
-  const rows: RowDef[] = [
-    { type: "section", label: "FUND OVERVIEW" },
-    { type: "input-num",  label: "Fund Size ($M)",           note: "Input",                         field: "fundSizeM" },
-    { type: "input-year", label: "Launch Year",              note: "Input",                         field: "year" },
-    { type: "calc",       label: "Mgmt Fee / Year ($K)",     note: `${g.mgmtFeeRate}% × fund size`, get: pl => pl.mgmtFeeK },
-    { type: "calc",       label: "Total DAW Pool ($K)",      note: `${g.dawRate}% × fund size`,     get: pl => pl.totalDawK },
-
-    { type: "section", label: "MB ANNUAL COMPENSATION" },
-    { type: "input-num", label: "MB Cash Comp ($K/yr)",      note: "Input",                                                   field: "mbCashComp" },
-    { type: "calc",      label: "MB Fee Waiver / Yr ($K)",   note: `GP commit × ${g.feeWaiverPct}% ÷ ${g.deployYears} yrs`,  get: pl => Math.round(pl.mbFeeWaiverAnnualK) },
-    { type: "sub",       label: "Total Cash + Fee Waiver",   note: "Annual",                                                  get: pl => Math.round(pl.totalCashWaiverK), color: "blue" },
-
-    { type: "section", label: "MB CARRIED INTEREST (Total Potential)" },
-    { type: "input-num", label: "1× Upfront DAW ($K)",       note: "35% unvested DAW · Fund 1 only",  field: "upfrontDaw" },
-    { type: "input-num", label: "MB DAW – Early Stage ($K)", note: "% of this fund's carry pool",      field: "mbDawEarlyStage" },
-    { type: "input-num", label: "MB DAW – Other Funds ($K)", note: "LE / LEO / LSC allocation",        field: "mbDawOtherFunds" },
-    { type: "sub",       label: "MB DAW Total ($K)",          note: "All sources",                      get: pl => pl.mbDawTotalK, color: "purple" },
-
-    { type: "section", label: "GP COMMIT" },
-    { type: "calc", label: `Fee Waiver Portion (${g.feeWaiverPct}%)`, note: `${g.feeWaiverPct}% of GP commit`, get: pl => pl.gpFeeWaiverK },
-    { type: "calc", label: `OOP Portion (${100 - g.feeWaiverPct}%)`,  note: `${100 - g.feeWaiverPct}% of GP commit`, get: pl => pl.gpOopK },
-    { type: "sub",  label: "MB Total GP Commit ($K)",         note: `${g.gpCommitPct}% of fund`,       get: pl => pl.gpCommitK, color: "amber" },
-
-    { type: "section", label: "MANAGEMENT CO P&L (Annual Run-Rate)" },
-    { type: "calc",      label: "MB Cash Comp ($K/yr)",       note: "Ref above",                        get: (pl, col) => col.mbCashComp },
-    { type: "input-num", label: "Other Team HC ($K/yr)",      note: "VP / Analyst headcount",            field: "otherTeamHC" },
-    { type: "sub",       label: "Total HC ($K/yr)",            note: "All team cash comp",                get: pl => pl.totalHcK, color: "rose" },
-    { type: "calc",      label: "Mgmt Fee – Current Fund",    note: "Current fund only",                 get: pl => pl.mgmtFeeK },
-    { type: "calc",      label: "+ Mgmt Fee from Prior Funds",note: `${g.priorFeeRetainPct}% retained on prior fund`, get: pl => pl.priorFeeK },
-    { type: "sub",       label: "Mgmt Fee Net of HC ($K/yr)", note: "House P&L from management fees",    get: pl => Math.round(pl.mgmtFeePostHcK), color: "emerald" },
-
-    { type: "section", label: "DAW ALLOCATION (Total Potential)" },
-    { type: "calc",      label: "MB Early Stage DAW ($K)",    note: "Ref above",                         get: (pl, col) => col.mbDawEarlyStage },
-    { type: "input-num", label: "Team DAW ($K)",              note: "Non-MB team carry",                 field: "teamDaw" },
-    { type: "sub",       label: "Remaining DAW – House ($K)", note: "Total pool less MB + team",         get: pl => pl.remainingDawK, color: "emerald" },
+  // Fund grouping info
+  const fundGroups = [
+    { label: "Fund 1", years: yrs.slice(0, 3), color: "blue",   bg: "bg-blue-600",   th: "bg-blue-50"   },
+    { label: "Fund 2", years: yrs.slice(3, 6), color: "indigo", bg: "bg-indigo-600", th: "bg-indigo-50" },
+    { label: "Fund 3", years: yrs.slice(6, 9), color: "violet", bg: "bg-violet-600", th: "bg-violet-50" },
   ];
 
-  const thClass = "px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500";
-  const fundColors = ["text-blue-700", "text-indigo-700", "text-violet-700"];
-  const fundBg     = ["bg-blue-50/40", "bg-indigo-50/40", "bg-violet-50/40"];
-
-  const subColors: Record<string, string> = {
-    blue:    "bg-blue-50   text-blue-900   border-blue-200",
-    purple:  "bg-purple-50 text-purple-900 border-purple-200",
-    amber:   "bg-amber-50  text-amber-900  border-amber-200",
-    rose:    "bg-rose-50   text-rose-900   border-rose-200",
-    emerald: "bg-emerald-50 text-emerald-900 border-emerald-200",
+  type RowSpec = {
+    id: string;
+    label: string;
+    sublabel?: string;
+    get: (y: YrData) => number;
+    style: "section" | "revenue" | "deduct" | "subtotal-rev" | "comp" | "expense" | "subtotal-hce" | "overhead" | "bottom";
+    note?: string;
+    onlyWhen?: (y: YrData) => boolean;
   };
 
+  const rows: RowSpec[] = [
+    // ── Revenue ──────────────────────────────────────────────────────────────
+    { id: "s-rev",    label: "REVENUE",                                     get: () => 0,              style: "section" },
+    { id: "feeF1",    label: "Mgmt Fees — Fund 1",                          get: y => y.feeF1,         style: "revenue",      note: `Full ${fp(d.mgmtFeeRate)} → steps to 75/50/25% post-deploy` },
+    { id: "feeF2",    label: "Mgmt Fees — Fund 2",                          get: y => y.feeF2,         style: "revenue",      onlyWhen: y => y.yr > d.deployYrs },
+    { id: "feeF3",    label: "Mgmt Fees — Fund 3",                          get: y => y.feeF3,         style: "revenue",      onlyWhen: y => y.yr > d.deployYrs * 2 },
+    { id: "grossFees",label: "Total Gross Mgmt Fees",                       get: y => y.grossFees,     style: "subtotal-rev", note: "Sum of all active fund fees" },
+    { id: "waiver",   label: "MB GP Commit Fee Waiver",                     get: y => -y.feeWaiver,    style: "deduct",       note: `${fp(d.feeWaiverPct)} of GP commit ÷ ${d.deployYrs} yrs · non-cash` },
+    { id: "netFees",  label: "Net Cash Mgmt Fees",                          get: y => y.netFees,       style: "subtotal-rev", note: "Cash revenue available for operations" },
+
+    // ── Headcount Compensation ────────────────────────────────────────────────
+    { id: "s-comp",   label: "HEADCOUNT COMPENSATION",                      get: () => 0,              style: "section" },
+    { id: "mb",       label: "MB / Partner",                                 get: y => y.mbComp,        style: "comp",         note: "Steps up at each fund raise" },
+    { id: "vp",       label: "VP",           sublabel: "Yrs 1–3",           get: y => y.vpComp,        style: "comp",         onlyWhen: y => y.vpComp > 0 },
+    { id: "principal",label: "Principal",    sublabel: "Yr 4+ · promoted",  get: y => y.principalComp, style: "comp",         onlyWhen: y => y.principalComp > 0 },
+    { id: "assoc",    label: "Associate",    sublabel: "Yrs 1–3",           get: y => y.assocComp,     style: "comp",         onlyWhen: y => y.assocComp > 0 },
+    { id: "vpProm",   label: "VP",           sublabel: "Yr 4+ · promoted",  get: y => y.vpPromComp,    style: "comp",         onlyWhen: y => y.vpPromComp > 0 },
+    { id: "newAssoc", label: "Associate",    sublabel: "Yr 4+ · new hire",  get: y => y.newAssocComp,  style: "comp",         onlyWhen: y => y.newAssocComp > 0 },
+    { id: "analyst",  label: "Analyst",      sublabel: "Yr 4+ · new hire",  get: y => y.analystComp,   style: "comp",         onlyWhen: y => y.analystComp > 0 },
+    { id: "totComp",  label: "Total Compensation",                           get: y => y.totalComp,     style: "subtotal-rev", note: "Cash comp only · carry/DAW allocated separately" },
+
+    // ── Headcount Expenses ────────────────────────────────────────────────────
+    { id: "benefits", label: "Benefits",     sublabel: `${d.benefitsRate}% of comp`,  get: y => y.benefits,  style: "expense", note: "Health, dental, 401k match, etc." },
+    { id: "empTax",   label: "Employer Taxes", sublabel: `${d.empTaxRate}% of comp`, get: y => y.empTaxes,  style: "expense", note: "FICA, FUTA, SUI" },
+    { id: "totHCE",   label: "Total Headcount Expenses",                     get: y => y.totalHCE,     style: "subtotal-hce" },
+
+    // ── Overhead ──────────────────────────────────────────────────────────────
+    { id: "s-oh",     label: "OVERHEAD",                                     get: () => 0,              style: "section" },
+    { id: "oh",       label: "General & Administrative", sublabel: `${d.overheadRate}% of comp`, get: y => y.overhead, style: "overhead", note: "Rent, tech, travel, legal, fund admin" },
+
+    // ── Bottom line ───────────────────────────────────────────────────────────
+    { id: "house",    label: "MGMT FEE TO THE HOUSE",                       get: y => y.houseNetPL,    style: "bottom",       note: "Net cash fees less all operating costs" },
+  ];
+
+  const colStyle = (y: YrData) =>
+    y.activeFund === 1 ? "bg-blue-50/30" : y.activeFund === 2 ? "bg-indigo-50/30" : "bg-violet-50/30";
+
+  const renderCell = (row: RowSpec, y: YrData) => {
+    const v = row.get(y);
+    const hide = row.onlyWhen && !row.onlyWhen(y);
+    if (hide || Math.abs(v) < 0.5) {
+      return <td key={y.yr} className={`px-3 py-1.5 text-right tabular-nums text-[11px] text-slate-300 ${colStyle(y)}`}>—</td>;
+    }
+    const isNeg = v < 0;
+    const textCls =
+      row.style === "deduct"       ? "text-rose-500 italic" :
+      row.style === "bottom"       ? (v >= 0 ? "text-emerald-700 font-black text-sm" : "text-red-600 font-black text-sm") :
+      row.style === "subtotal-rev" ? "font-bold text-slate-800" :
+      row.style === "subtotal-hce" ? "font-bold text-amber-800" :
+      row.style === "overhead"     ? "text-slate-600" :
+      "text-slate-700";
+    return (
+      <td key={y.yr} className={`px-3 py-1.5 text-right tabular-nums text-xs ${textCls} ${colStyle(y)}`}>
+        {isNeg ? <span className="text-rose-500">{fk(v)}</span> : fk(v)}
+      </td>
+    );
+  };
+
+  const renderTotal = (row: RowSpec) => {
+    if (row.style === "section" || row.style === "expense") return <td className="px-3 py-1.5 text-right text-[11px] text-slate-300 bg-slate-50">—</td>;
+    const v = sum(row.get);
+    if (Math.abs(v) < 0.5) return <td className="px-3 py-1.5 text-right text-[11px] text-slate-300 bg-slate-50">—</td>;
+    const isNeg = v < 0;
+    const textCls =
+      row.style === "deduct"       ? "text-rose-500 italic text-xs" :
+      row.style === "bottom"       ? (v >= 0 ? "text-emerald-700 font-black text-sm" : "text-red-600 font-black text-sm") :
+      row.style === "subtotal-rev" ? "font-bold text-slate-800 text-xs" :
+      row.style === "subtotal-hce" ? "font-bold text-amber-800 text-xs" :
+      "text-slate-600 text-xs";
+    return (
+      <td className={`px-3 py-1.5 text-right tabular-nums bg-slate-50 ${textCls}`}>
+        {isNeg ? <span className="text-rose-500">{fk(v)}</span> : fk(v)}
+      </td>
+    );
+  };
+
+  const ParamSection = ({ title, open, onToggle, children }: {
+    title: string; open: boolean; onToggle: () => void; children: React.ReactNode;
+  }) => (
+    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50">
+        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">{title}</span>
+        {open ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+      </button>
+      {open && <div className="px-4 pb-4 pt-1 border-t border-slate-100">{children}</div>}
+    </div>
+  );
+
+  const totalHousePL = sum(y => y.houseNetPL);
+  const peakHousePL  = Math.max(...yrs.map(y => y.houseNetPL));
+  const yr1HousePL   = yrs[0]?.houseNetPL ?? 0;
+  const yr4HousePL   = yrs[3]?.houseNetPL ?? 0;
+
   return (
-    <div className="space-y-5">
-      {/* Global params toggle */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <button
-          onClick={() => setShowGlobal(v => !v)}
-          className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-slate-50"
-        >
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Global Parameters</p>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Mgmt fee {fp(g.mgmtFeeRate)} · DAW {fp(g.dawRate)} · GP commit {fp(g.gpCommitPct)} ·
-              Deploy {g.deployYears} yrs · Fee waiver {fp(g.feeWaiverPct)} · Prior fund retain {fp(g.priorFeeRetainPct)}
+    <div className="space-y-4">
+      {/* Summary metrics */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: "Yr 1 House P&L", value: yr1HousePL,    sub: "First year operations" },
+          { label: "Fund 2 Launch",  value: yr4HousePL,    sub: "Year 4 — step-change" },
+          { label: "Peak House P&L", value: peakHousePL,   sub: "Best single year" },
+          { label: "9-Yr Cumulative",value: totalHousePL,  sub: "House operating P&L" },
+        ].map((m, i) => (
+          <div key={i} className={`rounded-xl border p-3 ${m.value >= 0 ? "bg-emerald-50 border-emerald-100" : "bg-red-50 border-red-100"}`}>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-0.5">{m.label}</p>
+            <p className={`text-xl font-black tabular-nums ${m.value >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+              {m.value >= 0 ? "" : "("}{fk(Math.abs(m.value))}{m.value < 0 ? ")" : ""}
             </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">{m.sub}</p>
           </div>
-          {showGlobal ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
-        </button>
-        {showGlobal && (
-          <div className="px-5 pb-5 pt-1 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-4">
-            {([
-              { label: "Mgmt Fee Rate", field: "mgmtFeeRate" as const, min: 1, max: 3, step: 0.25, display: fp(g.mgmtFeeRate) },
-              { label: "DAW / Carry Rate", field: "dawRate" as const, min: 15, max: 30, step: 2.5, display: fp(g.dawRate) },
-              { label: "GP Commit %", field: "gpCommitPct" as const, min: 0.5, max: 3, step: 0.25, display: fp(g.gpCommitPct) },
-              { label: "Deploy Years", field: "deployYears" as const, min: 2, max: 5, step: 1, display: `${g.deployYears} yrs` },
-              { label: "Fee Waiver %", field: "feeWaiverPct" as const, min: 50, max: 100, step: 5, display: fp(g.feeWaiverPct) },
-              { label: "Prior Fund Retain %", field: "priorFeeRetainPct" as const, min: 0, max: 100, step: 10, display: fp(g.priorFeeRetainPct) },
-            ] as const).map(s => (
-              <Slider key={s.field} label={s.label} value={g[s.field]} min={s.min} max={s.max} step={s.step}
-                onChange={v => setGlobal(s.field, v)} display={s.display} />
-            ))}
-          </div>
-        )}
+        ))}
       </div>
 
-      {/* Main P&L table */}
+      {/* Expense rate toggles — always visible */}
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+        <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-widest mb-3">Expense Rate Assumptions — adjust to see impact</p>
+        <div className="grid grid-cols-3 gap-6">
+          <Slider label={`Benefits (${d.benefitsRate}%)`} value={d.benefitsRate} min={5} max={20} step={1}
+            onChange={v => upd("benefitsRate", v)} display={fp(d.benefitsRate)}
+            sub="Health, dental, 401k match" />
+          <Slider label={`Employer Taxes (${d.empTaxRate}%)`} value={d.empTaxRate} min={3} max={15} step={1}
+            onChange={v => upd("empTaxRate", v)} display={fp(d.empTaxRate)}
+            sub="FICA, FUTA, SUI on comp" />
+          <Slider label={`Overhead (${d.overheadRate}%)`} value={d.overheadRate} min={10} max={40} step={2}
+            onChange={v => upd("overheadRate", v)} display={fp(d.overheadRate)}
+            sub="G&A as % of compensation" />
+        </div>
+      </div>
+
+      {/* Collapsible param panels */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Fund & Fees */}
+        <ParamSection title="Fund & Fees" open={showFund} onToggle={() => setShowFund(v => !v)}>
+          <div className="space-y-3 mt-2">
+            {[
+              { label: "Fund 1 Size ($M)", k: "f1SizeM" as const },
+              { label: "Fund 2 Size ($M)", k: "f2SizeM" as const },
+              { label: "Fund 3 Size ($M)", k: "f3SizeM" as const },
+            ].map(r => (
+              <div key={r.k} className="flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-600">{r.label}</span>
+                <InlineInput value={d[r.k]} onChange={v => upd(r.k, v)} />
+              </div>
+            ))}
+            <div className="pt-2 border-t border-slate-100 space-y-3">
+              <Slider label="Mgmt Fee" value={d.mgmtFeeRate} min={1} max={3} step={0.25}
+                onChange={v => upd("mgmtFeeRate", v)} display={fp(d.mgmtFeeRate)} />
+              <Slider label="GP Commit %" value={d.gpCommitPct} min={0.5} max={3} step={0.25}
+                onChange={v => upd("gpCommitPct", v)} display={fp(d.gpCommitPct)} />
+              <Slider label="Fee Waiver %" value={d.feeWaiverPct} min={50} max={100} step={5}
+                onChange={v => upd("feeWaiverPct", v)} display={fp(d.feeWaiverPct)} />
+            </div>
+          </div>
+        </ParamSection>
+
+        {/* Team Compensation */}
+        <ParamSection title="Team Compensation ($K)" open={showTeam} onToggle={() => setShowTeam(v => !v)}>
+          <div className="space-y-2 mt-2 text-xs">
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold">MB / Partner</p>
+            {[
+              { label: "Fund 1 Yrs", k: "mbComp_f1" as const },
+              { label: "Fund 2 Yrs", k: "mbComp_f2" as const },
+              { label: "Fund 3 Yrs", k: "mbComp_f3" as const },
+            ].map(r => (
+              <div key={r.k} className="flex items-center justify-between">
+                <span className="text-slate-600">{r.label}</span>
+                <InlineInput value={d[r.k]} onChange={v => upd(r.k, v)} />
+              </div>
+            ))}
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold pt-2">Team Base Comp (Yr 1 of role)</p>
+            {[
+              { label: "VP (yrs 1-3)", k: "vpBase" as const },
+              { label: "Principal (yr 4+)", k: "principalBase" as const },
+              { label: "Associate (yrs 1-3)", k: "assocBase" as const },
+              { label: "VP promoted (yr 4+)", k: "vpPromBase" as const },
+              { label: "New Assoc (yr 4+)", k: "newAssocBase" as const },
+              { label: "Analyst (yr 4+)", k: "analystBase" as const },
+            ].map(r => (
+              <div key={r.k} className="flex items-center justify-between">
+                <span className="text-slate-600">{r.label}</span>
+                <InlineInput value={d[r.k]} onChange={v => upd(r.k, v)} />
+              </div>
+            ))}
+            <div className="pt-2 border-t border-slate-100">
+              <Slider label="Annual Raise" value={d.compGrowth} min={0} max={8} step={0.5}
+                onChange={v => upd("compGrowth", v)} display={fp(d.compGrowth)} />
+            </div>
+          </div>
+        </ParamSection>
+
+        {/* DAW Allocations */}
+        <ParamSection title="DAW / Carry Allocations ($K)" open={showDaw} onToggle={() => setShowDaw(v => !v)}>
+          <div className="space-y-2 mt-2 text-xs">
+            <Slider label="Carry Rate" value={d.dawRate} min={15} max={30} step={2.5}
+              onChange={v => upd("dawRate", v)} display={fp(d.dawRate)} />
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold pt-2">MB DAW (Early Stage Fund)</p>
+            {[
+              { label: "Fund 1", k: "mbDaw_f1" as const },
+              { label: "Fund 2", k: "mbDaw_f2" as const },
+              { label: "Fund 3", k: "mbDaw_f3" as const },
+            ].map(r => (
+              <div key={r.k} className="flex items-center justify-between">
+                <span className="text-slate-600">{r.label}</span>
+                <InlineInput value={d[r.k]} onChange={v => upd(r.k, v)} />
+              </div>
+            ))}
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold pt-2">MB DAW (Other Funds)</p>
+            {[
+              { label: "Fund 1", k: "mbDawOther_f1" as const },
+              { label: "Fund 2", k: "mbDawOther_f2" as const },
+              { label: "Fund 3", k: "mbDawOther_f3" as const },
+            ].map(r => (
+              <div key={r.k} className="flex items-center justify-between">
+                <span className="text-slate-600">{r.label}</span>
+                <InlineInput value={d[r.k]} onChange={v => upd(r.k, v)} />
+              </div>
+            ))}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <span className="text-slate-600">1× Upfront DAW (F1)</span>
+              <InlineInput value={d.upfrontDaw} onChange={v => upd("upfrontDaw", v)} />
+            </div>
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold pt-2">Team DAW (Non-MB)</p>
+            {[
+              { label: "Fund 1", k: "teamDaw_f1" as const },
+              { label: "Fund 2", k: "teamDaw_f2" as const },
+              { label: "Fund 3", k: "teamDaw_f3" as const },
+            ].map(r => (
+              <div key={r.k} className="flex items-center justify-between">
+                <span className="text-slate-600">{r.label}</span>
+                <InlineInput value={d[r.k]} onChange={v => upd(r.k, v)} />
+              </div>
+            ))}
+          </div>
+        </ParamSection>
+      </div>
+
+      {/* Main Income Statement */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
+        <div className="px-4 pt-4 pb-2 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-slate-900">Management Company Income Statement</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">All figures in $K · Annual</p>
+          </div>
+        </div>
+        <table className="w-full text-xs border-collapse" style={{ minWidth: "860px" }}>
           <thead>
-            <tr className="bg-slate-50 border-b-2 border-slate-200">
-              <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-400 w-56">Line Item</th>
-              <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-300 w-44 hidden lg:table-cell">Note / Formula</th>
-              {funds.map((f, i) => (
-                <th key={i} className={`${thClass} ${fundColors[i]} w-32`}>
-                  {f.label}<br />
-                  <span className="font-bold text-sm normal-case">{f.year}</span>
+            {/* Fund group header */}
+            <tr>
+              <th className="sticky left-0 z-10 bg-white px-4 py-2 text-left w-44" />
+              {fundGroups.map(fg => (
+                <th key={fg.label} colSpan={3}
+                  className={`px-3 py-1.5 text-center text-[10px] font-bold uppercase tracking-widest text-white ${fg.bg}`}>
+                  {fg.label}
                 </th>
               ))}
+              <th className="px-3 py-1.5 text-center text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-50 w-20">
+                9-Yr Total
+              </th>
+            </tr>
+            {/* Year header */}
+            <tr className="border-b-2 border-slate-200">
+              <th className="sticky left-0 z-10 bg-slate-50 px-4 py-2 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                Line Item
+              </th>
+              {yrs.map(y => (
+                <th key={y.yr}
+                  className={`px-3 py-2 text-center text-[10px] font-semibold text-slate-600 ${
+                    y.activeFund === 1 ? "bg-blue-50" : y.activeFund === 2 ? "bg-indigo-50" : "bg-violet-50"
+                  }`}>
+                  Yr {y.yr}<br />
+                  <span className="font-normal text-slate-400">{y.calYear}</span>
+                </th>
+              ))}
+              <th className="px-3 py-2 text-center text-[10px] font-semibold text-slate-400 bg-slate-50" />
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, ri) => {
-              if (row.type === "section") {
+            {rows.map(row => {
+              if (row.style === "section") {
                 return (
-                  <tr key={ri} className="bg-slate-100">
-                    <td colSpan={5} className="px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                  <tr key={row.id} className="bg-slate-100">
+                    <td colSpan={11} className="sticky left-0 z-10 bg-slate-100 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                       {row.label}
                     </td>
                   </tr>
                 );
               }
-
-              if (row.type === "input-num" || row.type === "input-year") {
-                const field = row.field;
-                return (
-                  <tr key={ri} className="border-t border-slate-100 hover:bg-slate-50/50">
-                    <td className="px-4 py-1.5 text-xs font-medium text-slate-700">{row.label}</td>
-                    <td className="px-3 py-1.5 text-[10px] text-slate-400 hidden lg:table-cell">{row.note}</td>
-                    {funds.map((f, i) => (
-                      <NumCell
-                        key={i}
-                        value={f[field] as number}
-                        onChange={v => setFund(i, field, v)}
-                      />
-                    ))}
-                  </tr>
-                );
-              }
-
-              if (row.type === "calc") {
-                return (
-                  <tr key={ri} className="border-t border-slate-100 hover:bg-slate-50/50">
-                    <td className="px-4 py-1.5 text-xs text-slate-600">{row.label}</td>
-                    <td className="px-3 py-1.5 text-[10px] text-slate-400 hidden lg:table-cell">{row.note}</td>
-                    {pls.map((pl, i) => (
-                      <td key={i} className={`px-4 py-1.5 text-right tabular-nums text-xs text-slate-700 ${fundBg[i]}`}>
-                        {fk(row.get(pl, funds[i]))}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              }
-
-              if (row.type === "sub") {
-                const cc = subColors[row.color ?? "blue"];
-                return (
-                  <tr key={ri} className={`border-t-2 ${cc.includes("blue") ? "border-blue-200" : cc.includes("purple") ? "border-purple-200" : cc.includes("amber") ? "border-amber-200" : cc.includes("rose") ? "border-rose-200" : "border-emerald-200"}`}>
-                    <td className={`px-4 py-2 text-xs font-bold ${cc}`}>{row.label}</td>
-                    <td className={`px-3 py-2 text-[10px] hidden lg:table-cell ${cc}`}>{row.note}</td>
-                    {pls.map((pl, i) => (
-                      <td key={i} className={`px-4 py-2 text-right tabular-nums text-sm font-bold ${cc}`}>
-                        {fk(row.get(pl, funds[i]))}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              }
-
-              return null;
+              const isSubtotal = row.style === "subtotal-rev" || row.style === "subtotal-hce";
+              const isBottom   = row.style === "bottom";
+              const rowBg      = isBottom ? "" : isSubtotal ? "bg-slate-50" : "";
+              const labelCls   =
+                isBottom   ? "sticky left-0 z-10 bg-white px-4 py-2.5 font-black text-slate-900 uppercase tracking-wide text-[11px] border-t-2 border-slate-800" :
+                isSubtotal ? "sticky left-0 z-10 bg-slate-50 px-4 py-2 font-bold text-slate-800 border-t border-slate-200" :
+                row.style === "expense" ? "sticky left-0 z-10 bg-white px-4 py-1.5 text-slate-500 pl-8" :
+                row.style === "overhead" ? "sticky left-0 z-10 bg-white px-4 py-1.5 text-slate-600" :
+                "sticky left-0 z-10 bg-white px-4 py-1.5 text-slate-700";
+              return (
+                <tr key={row.id} className={`border-t border-slate-100 ${rowBg} ${isBottom ? "border-t-2 border-slate-800" : ""}`}>
+                  <td className={labelCls}>
+                    <span>{row.label}</span>
+                    {row.sublabel && <span className="text-[10px] text-slate-400 ml-1.5 font-normal">{row.sublabel}</span>}
+                    {row.note && !isBottom && <p className="text-[10px] text-slate-400 font-normal normal-case tracking-normal mt-0.5">{row.note}</p>}
+                  </td>
+                  {yrs.map(y => renderCell(row, y))}
+                  {renderTotal(row)}
+                </tr>
+              );
             })}
           </tbody>
         </table>
       </div>
 
-      {/* House vs Team summary cards */}
+      {/* DAW / Carry Economics */}
       <div>
-        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-3">House vs. Team Summary</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {funds.map((f, i) => {
-            const pl = pls[i];
-            const houseCash = Math.round(pl.mgmtFeePostHcK);
-            const houseDaw = pl.remainingDawK;
-            const mbTotal = Math.round(pl.totalCashWaiverK) + pl.mbDawTotalK;
-            const teamHcTotal = f.otherTeamHC;
-            const teamDawTotal = f.teamDaw;
-            const totalGpEcon = houseCash + houseDaw + mbTotal + teamHcTotal + teamDawTotal;
-            const houseSharePct = totalGpEcon > 0 ? ((houseCash + houseDaw) / totalGpEcon * 100).toFixed(0) : "—";
-
-            return (
-              <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <p className={`text-sm font-bold ${fundColors[i]}`}>{f.label} · {f.year}</p>
-                  <span className="text-[10px] bg-slate-100 text-slate-500 rounded px-1.5 py-0.5 font-semibold">${f.fundSizeM}M fund</span>
-                </div>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between items-baseline border-b border-slate-100 pb-2">
-                    <span className="text-slate-500">House — fee net of HC</span>
-                    <span className="font-semibold text-emerald-700 tabular-nums">{fk(houseCash)}<span className="text-slate-400 font-normal">/yr</span></span>
-                  </div>
-                  <div className="flex justify-between items-baseline border-b border-slate-100 pb-2">
-                    <span className="text-slate-500">House — remaining DAW</span>
-                    <span className="font-semibold text-emerald-700 tabular-nums">{fk(houseDaw)}</span>
-                  </div>
-                  <div className="flex justify-between items-baseline border-b border-slate-100 pb-2">
-                    <span className="text-slate-500">MB total (comp + DAW)</span>
-                    <span className="font-semibold text-blue-700 tabular-nums">{fk(mbTotal)}</span>
-                  </div>
-                  <div className="flex justify-between items-baseline border-b border-slate-100 pb-2">
-                    <span className="text-slate-500">Team HC cost</span>
-                    <span className="font-semibold text-rose-600 tabular-nums">{fk(teamHcTotal)}<span className="text-slate-400 font-normal">/yr</span></span>
-                  </div>
-                  <div className="flex justify-between items-baseline">
-                    <span className="text-slate-500">Team DAW</span>
-                    <span className="font-semibold text-purple-700 tabular-nums">{fk(teamDawTotal)}</span>
-                  </div>
-                </div>
-                <div className="mt-3 pt-2 border-t border-slate-200 flex justify-between items-baseline">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wide">House share of GP econ</span>
-                  <span className="text-base font-black text-emerald-700">{houseSharePct}%</span>
-                </div>
-              </div>
-            );
-          })}
+        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Carried Interest Economics (Total Potential · $K)</p>
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                {["Allocation", "Fund 1", "Fund 2", "Fund 3", "Total"].map(h => (
+                  <th key={h} className={`px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wide ${h === "Allocation" ? "text-left text-slate-400" : "text-right text-slate-500"}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {[
+                { label: "Total DAW Pool",         f1: dp1,               f2: dp2,               f3: dp3,               style: "bold" },
+                { label: "MB — Early Stage Fund",  f1: d.mbDaw_f1,        f2: d.mbDaw_f2,        f3: d.mbDaw_f3,        style: "" },
+                { label: "MB — Other Funds",       f1: d.mbDawOther_f1,   f2: d.mbDawOther_f2,   f3: d.mbDawOther_f3,   style: "" },
+                { label: "1× Upfront DAW",         f1: d.upfrontDaw,      f2: 0,                 f3: 0,                 style: "" },
+                { label: "MB DAW Total",            f1: d.upfrontDaw + d.mbDaw_f1 + d.mbDawOther_f1, f2: d.mbDaw_f2 + d.mbDawOther_f2, f3: d.mbDaw_f3 + d.mbDawOther_f3, style: "bold amber" },
+                { label: "Team DAW (Non-MB)",       f1: d.teamDaw_f1,     f2: d.teamDaw_f2,      f3: d.teamDaw_f3,      style: "" },
+                { label: "House — Remaining DAW",   f1: dp1 - d.mbDaw_f1 - d.teamDaw_f1, f2: dp2 - d.mbDaw_f2 - d.teamDaw_f2, f3: dp3 - d.mbDaw_f3 - d.teamDaw_f3, style: "bold emerald" },
+              ].map((r, i) => {
+                const total = r.f1 + r.f2 + r.f3;
+                const isBold = r.style.includes("bold");
+                const cls = r.style.includes("emerald") ? "text-emerald-700" : r.style.includes("amber") ? "text-amber-700" : "text-slate-700";
+                return (
+                  <tr key={i} className={isBold ? "bg-slate-50" : ""}>
+                    <td className={`px-4 py-2 ${isBold ? "font-bold " + cls : "text-slate-600"}`}>{r.label}</td>
+                    {[r.f1, r.f2, r.f3, total].map((v, j) => (
+                      <td key={j} className={`px-4 py-2 text-right tabular-nums ${isBold ? "font-bold " + cls : "text-slate-700"}`}>
+                        {v > 0 ? fk(v) : "—"}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot className="border-t-2 border-slate-300 bg-slate-50">
+              <tr>
+                <td className="px-4 py-2 text-xs font-bold text-slate-700">House Share of Total DAW</td>
+                {[dp1, dp2, dp3, dp1 + dp2 + dp3].map((pool, i) => {
+                  const remaining = i < 3
+                    ? [dp1 - d.mbDaw_f1 - d.teamDaw_f1, dp2 - d.mbDaw_f2 - d.teamDaw_f2, dp3 - d.mbDaw_f3 - d.teamDaw_f3][i]
+                    : houseRemaining;
+                  const pct = pool > 0 ? (remaining / pool * 100).toFixed(0) : "—";
+                  return <td key={i} className="px-4 py-2 text-right tabular-nums font-bold text-emerald-700">{pct}%</td>;
+                })}
+              </tr>
+            </tfoot>
+          </table>
         </div>
       </div>
 
       <p className="text-[11px] text-slate-400">
-        All figures in $K. Blue cells are inputs — edit directly. Calculated cells update instantly.
-        DAW figures are total potential carry, not present value. "Mgmt Fee Net of HC" is the annual house P&amp;L
-        from management company operations after all cash compensation.
+        All figures in $K. Fee step-down: 75% / 50% / 25% of committed-period rate in years 1–3 after each fund's deployment ends.
+        Comp rows marked "Yr 4+ · new hire" are blank until Fund 2 launches. Benefits and employer taxes are toggleable above.
+        DAW figures are total potential carry, not present value — realized only on successful exits.
       </p>
     </div>
   );
