@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { Calculator, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 
 // ─── Single-Fund Model Types ───────────────────────────────────────────────────
@@ -196,17 +196,10 @@ interface APLInputs {
   deployYrs: number;         // years per fund (assume equal)
   mgmtFeeRate: number;       // % e.g. 2.0
   dawRate: number;           // carry % e.g. 20
-  gpCommitPct: number;       // % e.g. 1.0
-  feeWaiverPct: number;      // % of GP commit waived e.g. 80
-  // Team compensation ($K base, growth applied annually)
-  mbComp_f1: number; mbComp_f2: number; mbComp_f3: number;
-  vpBase: number;            // VP — active years 1-3
-  principalBase: number;     // Principal (fmr VP) — active yr 4+
-  assocBase: number;         // Associate — active years 1-3
-  vpPromBase: number;        // VP promoted (fmr Assoc) — active yr 4+
-  newAssocBase: number;      // New Associate — active yr 4+
-  analystBase: number;       // Analyst — active yr 4+
-  compGrowth: number;        // % annual raise
+  mbGpCommitPct: number;     // MB GP commit % e.g. 1.0
+  teamGpCommitPct: number;   // Team GP commit % (lower) e.g. 0.5
+  feeWaiverPct: number;      // % of GP commit funded via waived fees e.g. 80
+  compGrowth: number;        // % annual raise — used to seed the editable comp grid
   // Expense rates
   benefitsRate: number;      // % of comp (default 10)
   empTaxRate: number;        // % of comp (default 8)
@@ -221,10 +214,8 @@ interface APLInputs {
 const APL_DEF: APLInputs = {
   f1SizeM: 100, f2SizeM: 150, f3SizeM: 225,
   launchYear: 2027, deployYrs: 3,
-  mgmtFeeRate: 2.0, dawRate: 20, gpCommitPct: 1.0, feeWaiverPct: 80,
-  mbComp_f1: 700, mbComp_f2: 850, mbComp_f3: 1000,
-  vpBase: 260, principalBase: 350, assocBase: 165,
-  vpPromBase: 250, newAssocBase: 175, analystBase: 130,
+  mgmtFeeRate: 2.0, dawRate: 20,
+  mbGpCommitPct: 1.0, teamGpCommitPct: 0.5, feeWaiverPct: 80,
   compGrowth: 3,
   benefitsRate: 10, empTaxRate: 8, overheadRate: 20,
   mbDaw_f1: 7000, mbDaw_f2: 9000, mbDaw_f3: 11000,
@@ -233,34 +224,65 @@ const APL_DEF: APLInputs = {
   teamDaw_f1: 850, teamDaw_f2: 3000, teamDaw_f3: 5000,
 };
 
+// ── Team roster — seniority order, high → low. Each role holds a 9-year editable
+//    salary array ($K). `seedBase`/`startYr` drive the formula-seed; `seedArr`
+//    (MB) provides explicit per-fund values that step at each raise.
+interface RoleDef {
+  id: string; label: string; sublabel: string;
+  startYr: number; seedBase?: number; seedArr?: number[];
+}
+const COMP_ROLES: RoleDef[] = [
+  { id: "mb",        label: "MB / Managing Partner", sublabel: "Founder",      startYr: 1, seedArr: [700, 700, 700, 850, 850, 850, 1000, 1000, 1000] },
+  { id: "partner",   label: "Partner",              sublabel: "Yr 5+",        startYr: 5, seedBase: 500 },
+  { id: "principal", label: "Principal",            sublabel: "Yr 4+",        startYr: 4, seedBase: 550 },
+  { id: "vp",        label: "VP",                   sublabel: "",             startYr: 1, seedBase: 400 },
+  { id: "associate", label: "Associate",           sublabel: "",             startYr: 1, seedBase: 165 },
+  { id: "analyst",   label: "Analyst",             sublabel: "Yr 4+",        startYr: 4, seedBase: 130 },
+];
+const COMP_ROLE_IDS = COMP_ROLES.map(r => r.id);
+
+type CompGrid = Record<string, number[]>;
+
+function seedComp(growth: number): CompGrid {
+  const g = growth / 100;
+  const grid: CompGrid = {};
+  for (const r of COMP_ROLES) {
+    if (r.seedArr) {
+      grid[r.id] = [...r.seedArr];
+    } else {
+      grid[r.id] = Array.from({ length: 9 }, (_, i) => {
+        const yr = i + 1;
+        return yr < r.startYr ? 0 : Math.round((r.seedBase ?? 0) * Math.pow(1 + g, yr - r.startYr));
+      });
+    }
+  }
+  return grid;
+}
+
 interface YrData {
   yr: number; calYear: number; activeFund: number;
   feeF1: number; feeF2: number; feeF3: number;
-  grossFees: number; feeWaiver: number; netFees: number;
-  mbComp: number;
-  vpComp: number; principalComp: number;
-  assocComp: number; vpPromComp: number; newAssocComp: number; analystComp: number;
-  teamComp: number;   // non-MB only
+  grossFees: number;
+  mbWaiver: number; teamWaiver: number; feeWaiver: number;
+  netFees: number;
   totalComp: number;
   benefits: number; empTaxes: number; totalHCE: number;
   overhead: number; houseNetPL: number;
 }
 
-function computeAPL(d: APLInputs): YrData[] {
+function computeAPL(d: APLInputs, comp: CompGrid): YrData[] {
   const D = d.deployYrs;
-  const g = d.compGrowth / 100;
   const STEP = [1.0, 0.75, 0.50, 0.25, 0.0];
   const fullFee = (sizeM: number) => Math.round(sizeM * 1000 * (d.mgmtFeeRate / 100));
   const f1F = fullFee(d.f1SizeM), f2F = fullFee(d.f2SizeM), f3F = fullFee(d.f3SizeM);
 
-  // Annual GP commit fee waiver per fund's deployment
-  const waiverAnn = (sizeM: number) =>
-    Math.round(sizeM * 1000 * (d.gpCommitPct / 100) * (d.feeWaiverPct / 100) / D);
-  const w1 = waiverAnn(d.f1SizeM), w2 = waiverAnn(d.f2SizeM), w3 = waiverAnn(d.f3SizeM);
+  // Annual GP-commit fee waiver per fund's deployment — split MB vs. team
+  const waiverAnn = (sizeM: number, commitPct: number) =>
+    Math.round(sizeM * 1000 * (commitPct / 100) * (d.feeWaiverPct / 100) / D);
+  const mbW1 = waiverAnn(d.f1SizeM, d.mbGpCommitPct), mbW2 = waiverAnn(d.f2SizeM, d.mbGpCommitPct), mbW3 = waiverAnn(d.f3SizeM, d.mbGpCommitPct);
+  const tmW1 = waiverAnn(d.f1SizeM, d.teamGpCommitPct), tmW2 = waiverAnn(d.f2SizeM, d.teamGpCommitPct), tmW3 = waiverAnn(d.f3SizeM, d.teamGpCommitPct);
 
   const step = (full: number, offset: number) => Math.round(full * STEP[Math.min(offset, 4)]);
-  const grow = (base: number, startYr: number, yr: number) =>
-    Math.round(base * Math.pow(1 + g, yr - startYr));
 
   return Array.from({ length: 9 }, (_, i) => {
     const yr = i + 1;
@@ -273,24 +295,14 @@ function computeAPL(d: APLInputs): YrData[] {
     const feeF3 = yr < D * 2 + 1 ? 0 : f3F; // fund 3 still deploying in yrs 7-9
     const grossFees = feeF1 + feeF2 + feeF3;
 
-    // Fee waiver (non-cash reduction) during each fund's deployment
-    const feeWaiver = yr <= D ? w1 : yr <= D * 2 ? w2 : w3;
+    // GP-commit fee waivers (non-cash) during each fund's deployment
+    const mbWaiver   = yr <= D ? mbW1 : yr <= D * 2 ? mbW2 : mbW3;
+    const teamWaiver = yr <= D ? tmW1 : yr <= D * 2 ? tmW2 : tmW3;
+    const feeWaiver  = mbWaiver + teamWaiver;
     const netFees = grossFees - feeWaiver;
 
-    // MB flat within each fund period
-    const mbComp = activeFund === 1 ? d.mbComp_f1 : activeFund === 2 ? d.mbComp_f2 : d.mbComp_f3;
-
-    // Team — roles transition at year D+1
-    const isF1 = yr <= D;
-    const vpComp       = isF1 ? grow(d.vpBase, 1, yr) : 0;
-    const principalComp = !isF1 ? grow(d.principalBase, D + 1, yr) : 0;
-    const assocComp    = isF1 ? grow(d.assocBase, 1, yr) : 0;
-    const vpPromComp   = !isF1 ? grow(d.vpPromBase, D + 1, yr) : 0;
-    const newAssocComp = !isF1 ? grow(d.newAssocBase, D + 1, yr) : 0;
-    const analystComp  = !isF1 ? grow(d.analystBase, D + 1, yr) : 0;
-
-    const teamComp = vpComp + principalComp + assocComp + vpPromComp + newAssocComp + analystComp;
-    const totalComp = mbComp + teamComp;
+    // Compensation — read straight off the editable grid
+    const totalComp = COMP_ROLE_IDS.reduce((s, id) => s + (comp[id]?.[i] ?? 0), 0);
 
     const benefits  = Math.round(totalComp * (d.benefitsRate / 100));
     const empTaxes  = Math.round(totalComp * (d.empTaxRate / 100));
@@ -300,9 +312,9 @@ function computeAPL(d: APLInputs): YrData[] {
 
     return {
       yr, calYear, activeFund,
-      feeF1, feeF2, feeF3, grossFees, feeWaiver, netFees,
-      mbComp, vpComp, principalComp, assocComp, vpPromComp, newAssocComp, analystComp,
-      teamComp, totalComp, benefits, empTaxes, totalHCE, overhead, houseNetPL,
+      feeF1, feeF2, feeF3, grossFees,
+      mbWaiver, teamWaiver, feeWaiver, netFees,
+      totalComp, benefits, empTaxes, totalHCE, overhead, houseNetPL,
     };
   });
 }
@@ -330,11 +342,15 @@ function InlineInput({ value, onChange, width = "w-20" }: {
 function GPPnL() {
   const [d, setD] = useState<APLInputs>(APL_DEF);
   const upd = <K extends keyof APLInputs>(k: K, v: APLInputs[K]) => setD(p => ({ ...p, [k]: v }));
+  const [comp, setComp] = useState<CompGrid>(() => seedComp(APL_DEF.compGrowth));
+  const editComp = (roleId: string, i: number, v: number) =>
+    setComp(p => ({ ...p, [roleId]: (p[roleId] ?? Array(9).fill(0)).map((x, j) => (j === i ? v : x)) }));
+  const resetComp = () => setComp(seedComp(d.compGrowth));
   const [showFund, setShowFund] = useState(false);
   const [showTeam, setShowTeam] = useState(false);
   const [showDaw,  setShowDaw]  = useState(false);
 
-  const yrs = useMemo(() => computeAPL(d), [d]);
+  const yrs = useMemo(() => computeAPL(d, comp), [d, comp]);
   const sum  = (get: (y: YrData) => number) => yrs.reduce((s, y) => s + get(y), 0);
 
   // DAW pools
@@ -362,7 +378,17 @@ function GPPnL() {
     style: "section" | "revenue" | "deduct" | "subtotal-rev" | "comp" | "expense" | "subtotal-hce" | "overhead" | "bottom";
     note?: string;
     onlyWhen?: (y: YrData) => boolean;
+    editId?: string;   // when set, year cells are directly editable (bound to comp grid)
   };
+
+  const compRows: RowSpec[] = COMP_ROLES.map(r => ({
+    id: r.id,
+    label: r.label,
+    sublabel: r.sublabel || undefined,
+    get: (y: YrData) => comp[r.id]?.[y.yr - 1] ?? 0,
+    style: "comp" as const,
+    editId: r.id,
+  }));
 
   const rows: RowSpec[] = [
     // ── Revenue ──────────────────────────────────────────────────────────────
@@ -371,18 +397,13 @@ function GPPnL() {
     { id: "feeF2",    label: "Mgmt Fees — Fund 2",                          get: y => y.feeF2,         style: "revenue",      onlyWhen: y => y.yr > d.deployYrs },
     { id: "feeF3",    label: "Mgmt Fees — Fund 3",                          get: y => y.feeF3,         style: "revenue",      onlyWhen: y => y.yr > d.deployYrs * 2 },
     { id: "grossFees",label: "Total Gross Mgmt Fees",                       get: y => y.grossFees,     style: "subtotal-rev", note: "Sum of all active fund fees" },
-    { id: "waiver",   label: "MB GP Commit Fee Waiver",                     get: y => -y.feeWaiver,    style: "deduct",       note: `${fp(d.feeWaiverPct)} of GP commit ÷ ${d.deployYrs} yrs · non-cash` },
+    { id: "mbWaiver",   label: "MB GP Commit Fee Waiver",                   get: y => -y.mbWaiver,     style: "deduct",       note: `${fp(d.mbGpCommitPct)} commit · ${fp(d.feeWaiverPct)} waived ÷ ${d.deployYrs} yrs · non-cash` },
+    { id: "teamWaiver", label: "Team GP Commit Fee Waiver",                 get: y => -y.teamWaiver,   style: "deduct",       note: `${fp(d.teamGpCommitPct)} commit · ${fp(d.feeWaiverPct)} waived ÷ ${d.deployYrs} yrs · non-cash` },
     { id: "netFees",  label: "Net Cash Mgmt Fees",                          get: y => y.netFees,       style: "subtotal-rev", note: "Cash revenue available for operations" },
 
-    // ── Headcount Compensation ────────────────────────────────────────────────
+    // ── Headcount Compensation (editable — click any cell) ─────────────────────
     { id: "s-comp",   label: "HEADCOUNT COMPENSATION",                      get: () => 0,              style: "section" },
-    { id: "mb",       label: "MB / Partner",                                 get: y => y.mbComp,        style: "comp",         note: "Steps up at each fund raise" },
-    { id: "vp",       label: "VP",           sublabel: "Yrs 1–3",           get: y => y.vpComp,        style: "comp",         onlyWhen: y => y.vpComp > 0 },
-    { id: "principal",label: "Principal",    sublabel: "Yr 4+ · promoted",  get: y => y.principalComp, style: "comp",         onlyWhen: y => y.principalComp > 0 },
-    { id: "assoc",    label: "Associate",    sublabel: "Yrs 1–3",           get: y => y.assocComp,     style: "comp",         onlyWhen: y => y.assocComp > 0 },
-    { id: "vpProm",   label: "VP",           sublabel: "Yr 4+ · promoted",  get: y => y.vpPromComp,    style: "comp",         onlyWhen: y => y.vpPromComp > 0 },
-    { id: "newAssoc", label: "Associate",    sublabel: "Yr 4+ · new hire",  get: y => y.newAssocComp,  style: "comp",         onlyWhen: y => y.newAssocComp > 0 },
-    { id: "analyst",  label: "Analyst",      sublabel: "Yr 4+ · new hire",  get: y => y.analystComp,   style: "comp",         onlyWhen: y => y.analystComp > 0 },
+    ...compRows,
     { id: "totComp",  label: "Total Compensation",                           get: y => y.totalComp,     style: "subtotal-rev", note: "Cash comp only · carry/DAW allocated separately" },
 
     // ── Headcount Expenses ────────────────────────────────────────────────────
@@ -402,6 +423,22 @@ function GPPnL() {
     y.activeFund === 1 ? "bg-blue-50/30" : y.activeFund === 2 ? "bg-indigo-50/30" : "bg-violet-50/30";
 
   const renderCell = (row: RowSpec, y: YrData) => {
+    // Editable comp cell — spreadsheet-style direct entry
+    if (row.editId) {
+      const cur = comp[row.editId]?.[y.yr - 1] ?? 0;
+      return (
+        <td key={y.yr} className={`px-1 py-0.5 text-right ${colStyle(y)}`}>
+          <input
+            type="number"
+            value={cur === 0 ? "" : cur}
+            placeholder="—"
+            onChange={e => editComp(row.editId!, y.yr - 1, Number(e.target.value) || 0)}
+            onFocus={e => e.target.select()}
+            className="w-[58px] text-right tabular-nums text-xs text-slate-700 bg-transparent rounded px-1 py-1 border border-transparent hover:border-blue-200 hover:bg-blue-50/60 focus:bg-white focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300 placeholder:text-slate-300"
+          />
+        </td>
+      );
+    }
     const v = row.get(y);
     const hide = row.onlyWhen && !row.onlyWhen(y);
     if (hide || Math.abs(v) < 0.5) {
@@ -441,7 +478,7 @@ function GPPnL() {
   };
 
   const ParamSection = ({ title, open, onToggle, children }: {
-    title: string; open: boolean; onToggle: () => void; children: React.ReactNode;
+    title: string; open: boolean; onToggle: () => void; children: ReactNode;
   }) => (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50">
@@ -511,45 +548,44 @@ function GPPnL() {
             <div className="pt-2 border-t border-slate-100 space-y-3">
               <Slider label="Mgmt Fee" value={d.mgmtFeeRate} min={1} max={3} step={0.25}
                 onChange={v => upd("mgmtFeeRate", v)} display={fp(d.mgmtFeeRate)} />
-              <Slider label="GP Commit %" value={d.gpCommitPct} min={0.5} max={3} step={0.25}
-                onChange={v => upd("gpCommitPct", v)} display={fp(d.gpCommitPct)} />
+              <Slider label="MB GP Commit %" value={d.mbGpCommitPct} min={0.5} max={5} step={0.25}
+                onChange={v => upd("mbGpCommitPct", v)} display={fp(d.mbGpCommitPct)} />
+              <Slider label="Team GP Commit %" value={d.teamGpCommitPct} min={0} max={3} step={0.25}
+                onChange={v => upd("teamGpCommitPct", v)} display={fp(d.teamGpCommitPct)}
+                sub="Lower than MB — funds smaller team commit" />
               <Slider label="Fee Waiver %" value={d.feeWaiverPct} min={50} max={100} step={5}
-                onChange={v => upd("feeWaiverPct", v)} display={fp(d.feeWaiverPct)} />
+                onChange={v => upd("feeWaiverPct", v)} display={fp(d.feeWaiverPct)}
+                sub="Applies to both MB and team commit" />
             </div>
           </div>
         </ParamSection>
 
         {/* Team Compensation */}
         <ParamSection title="Team Compensation ($K)" open={showTeam} onToggle={() => setShowTeam(v => !v)}>
-          <div className="space-y-2 mt-2 text-xs">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold">MB / Partner</p>
-            {[
-              { label: "Fund 1 Yrs", k: "mbComp_f1" as const },
-              { label: "Fund 2 Yrs", k: "mbComp_f2" as const },
-              { label: "Fund 3 Yrs", k: "mbComp_f3" as const },
-            ].map(r => (
-              <div key={r.k} className="flex items-center justify-between">
-                <span className="text-slate-600">{r.label}</span>
-                <InlineInput value={d[r.k]} onChange={v => upd(r.k, v)} />
-              </div>
-            ))}
-            <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold pt-2">Team Base Comp (Yr 1 of role)</p>
-            {[
-              { label: "VP (yrs 1-3)", k: "vpBase" as const },
-              { label: "Principal (yr 4+)", k: "principalBase" as const },
-              { label: "Associate (yrs 1-3)", k: "assocBase" as const },
-              { label: "VP promoted (yr 4+)", k: "vpPromBase" as const },
-              { label: "New Assoc (yr 4+)", k: "newAssocBase" as const },
-              { label: "Analyst (yr 4+)", k: "analystBase" as const },
-            ].map(r => (
-              <div key={r.k} className="flex items-center justify-between">
-                <span className="text-slate-600">{r.label}</span>
-                <InlineInput value={d[r.k]} onChange={v => upd(r.k, v)} />
-              </div>
-            ))}
-            <div className="pt-2 border-t border-slate-100">
-              <Slider label="Annual Raise" value={d.compGrowth} min={0} max={8} step={0.5}
-                onChange={v => upd("compGrowth", v)} display={fp(d.compGrowth)} />
+          <div className="space-y-3 mt-2 text-xs">
+            <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2">
+              <p className="text-[11px] text-blue-700 font-medium">✎ Edit any salary directly in the income statement table below.</p>
+              <p className="text-[10px] text-blue-500 mt-0.5">Click a comp cell and type — like a spreadsheet.</p>
+            </div>
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold pt-1">Roster (seniority order)</p>
+            <ul className="space-y-1 text-slate-600">
+              {COMP_ROLES.map(r => (
+                <li key={r.id} className="flex items-center justify-between">
+                  <span>{r.label}</span>
+                  <span className="text-[10px] text-slate-400">{r.sublabel || "Yr 1+"}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <Slider label="Annual Raise (seed)" value={d.compGrowth} min={0} max={8} step={0.5}
+                onChange={v => upd("compGrowth", v)} display={fp(d.compGrowth)}
+                sub="Used to re-seed the grid below" />
+              <button
+                onClick={resetComp}
+                className="w-full text-[11px] font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg py-2 transition-colors"
+              >
+                Reset comp grid to formula
+              </button>
             </div>
           </div>
         </ParamSection>
@@ -730,9 +766,10 @@ function GPPnL() {
       </div>
 
       <p className="text-[11px] text-slate-400">
-        All figures in $K. Fee step-down: 75% / 50% / 25% of committed-period rate in years 1–3 after each fund's deployment ends.
-        Comp rows marked "Yr 4+ · new hire" are blank until Fund 2 launches. Benefits and employer taxes are toggleable above.
-        DAW figures are total potential carry, not present value — realized only on successful exits.
+        All figures in $K. Compensation cells are directly editable — click any salary in the table to override it.
+        Fee step-down: 75% / 50% / 25% of committed-period rate in years 1–3 after each fund's deployment ends.
+        Partner joins Yr 5; Principal &amp; Analyst join Yr 4 — earlier years are blank. Benefits, employer taxes and overhead are toggleable above.
+        Both MB and team fund their GP commits via waived fees ({fp(d.feeWaiverPct)}). DAW figures are total potential carry, not present value.
       </p>
     </div>
   );
