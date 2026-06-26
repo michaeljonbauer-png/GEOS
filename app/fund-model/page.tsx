@@ -741,7 +741,7 @@ function GPPnL() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const DEFAULTS: Inputs = {
-  fundSize: 90, deployYears: 3, holdYears: 5, grossMoic: 3.0,
+  fundSize: 100, deployYears: 3, holdYears: 5, grossMoic: 3.0,
   mgmtFeeRate: 2.0, carryRate: 20, fundLife: 10, recycleRate: 0, waterfall: "american",
 };
 
