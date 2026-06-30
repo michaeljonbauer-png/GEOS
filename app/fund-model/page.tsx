@@ -812,14 +812,13 @@ export default function FundModelPage() {
           <Calculator className="text-blue-500" size={20} />
           <h1 className="text-xl font-bold text-slate-900">GP Fund Model</h1>
         </div>
-        <p className="text-sm text-slate-500">Fund returns calculator and multi-fund management company P&amp;L.</p>
+        <p className="text-sm text-slate-500">Fund returns calculator — adjust any parameter to see returns update instantly.</p>
       </div>
 
-      {/* Tab switcher */}
+      {/* Tab switcher — GP P&L tab hidden (component preserved below, re-add { key: "pnl", label: "GP P&L" } to restore) */}
       <div className="flex gap-1 bg-slate-100 p-1 rounded-lg w-fit">
         {([
           { key: "returns", label: "Fund Returns" },
-          { key: "pnl",     label: "GP P&L" },
         ] as const).map(t => (
           <button
             key={t.key}
