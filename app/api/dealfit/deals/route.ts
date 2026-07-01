@@ -3,11 +3,16 @@ import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+const INCLUDE = {
+  interests: { select: { handle: true } },
+  ratings:   { select: { handle: true, rating: true } },
+} as const;
+
 export async function GET() {
   try {
     const deals = await db.sharedDeal.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { interests: { select: { handle: true } } },
+      orderBy: { seqNum: "asc" },
+      include: INCLUDE,
     });
     return NextResponse.json({ deals });
   } catch {
@@ -24,6 +29,7 @@ export async function POST(req: NextRequest) {
     const deal = await db.sharedDeal.create({
       data: {
         codeName:      body.codeName.trim(),
+        submittedBy:   body.submittedBy || null,
         vertical:      body.vertical ?? "",
         endMarket:     body.endMarket || null,
         description:   body.description || null,
@@ -38,6 +44,7 @@ export async function POST(req: NextRequest) {
         acvK:          body.acvK != null ? Number(body.acvK) : null,
         status:        "ACTIVE",
       },
+      include: INCLUDE,
     });
     return NextResponse.json({ deal });
   } catch (err) {
@@ -56,11 +63,19 @@ export async function DELETE(req: NextRequest) {
   }
 }
 
+// Only mutable content fields — seqNum, submittedBy, id are immutable
+const MUTABLE = new Set([
+  "codeName","vertical","endMarket","description","stage",
+  "arrM","yoyGrowth","totalRaisedM","ndr","gdr","ltmEbitdaM",
+  "customerCount","acvK","status",
+]);
+
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, ...data } = body;
-    const deal = await db.sharedDeal.update({ where: { id }, data });
+    const { id, ...rest } = body;
+    const data = Object.fromEntries(Object.entries(rest).filter(([k]) => MUTABLE.has(k)));
+    const deal = await db.sharedDeal.update({ where: { id }, data, include: INCLUDE });
     return NextResponse.json({ deal });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

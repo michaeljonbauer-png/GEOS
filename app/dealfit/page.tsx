@@ -3,19 +3,21 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   Plus, X, Check, Search, Zap,
-  Heart, AlertCircle, Info, Trash2, Users, TrendingUp, DollarSign,
+  Heart, AlertCircle, Info, Trash2, Users, TrendingUp, DollarSign, Star,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Deal {
-  id: string; codeName: string; vertical: string; endMarket?: string | null;
+  id: string; seqNum: number; submittedBy?: string | null;
+  codeName: string; vertical: string; endMarket?: string | null;
   description?: string | null; stage?: string | null;
   arrM?: number | null; yoyGrowth?: number | null; totalRaisedM?: number | null;
   ndr?: number | null; gdr?: number | null; ltmEbitdaM?: number | null;
   customerCount?: number | null; acvK?: number | null;
   status: string; createdAt: string;
   interests: { handle: string }[];
+  ratings: { handle: string; rating: number }[];
 }
 
 interface Profile {
@@ -232,6 +234,64 @@ function CellSelect({ id, field, value, options, editCell, draft, setDraft, onSt
   );
 }
 
+// ── Star Rating Cell ──────────────────────────────────────────────────────────
+
+function RatingCell({ deal, myHandle, onRate }: {
+  deal: Deal; myHandle: string;
+  onRate: (dealId: string, rating: number) => void;
+}) {
+  const [hover, setHover] = useState(0);
+  const [isHovering, setIsHovering] = useState(false);
+
+  const myRating = deal.ratings.find(r => r.handle === myHandle)?.rating ?? 0;
+  const count    = deal.ratings.length;
+  const avg      = count > 0
+    ? deal.ratings.reduce((s, r) => s + r.rating, 0) / count
+    : null;
+
+  const activeStar = hover > 0 ? hover : myRating;
+
+  const handleClick = (star: number) => {
+    if (!myHandle) return;
+    onRate(deal.id, star === myRating ? 0 : star); // re-click clears rating
+  };
+
+  return (
+    <div
+      className="flex flex-col items-center gap-0.5 py-0.5 px-1 select-none"
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => { setIsHovering(false); setHover(0); }}
+    >
+      {/* 5 stars */}
+      <div className="flex gap-px">
+        {[1, 2, 3, 4, 5].map(star => {
+          const filled = isHovering ? star <= activeStar : avg != null && star <= Math.round(avg);
+          const isMyRating = !isHovering && star === myRating;
+          return (
+            <button
+              key={star}
+              disabled={!myHandle}
+              onMouseEnter={() => myHandle && setHover(star)}
+              onClick={() => handleClick(star)}
+              className={`text-[11px] leading-none transition-colors ${
+                isMyRating   ? "text-amber-500" :
+                filled       ? "text-amber-300" :
+                               "text-slate-200"
+              } ${myHandle ? "cursor-pointer hover:scale-110" : "cursor-default"}`}
+            >★</button>
+          );
+        })}
+      </div>
+      {/* Avg / prompt */}
+      <span className="text-[9px] leading-none tabular-nums text-slate-400">
+        {avg != null
+          ? `${avg.toFixed(1)} · ${count}`
+          : myHandle ? <span className="text-slate-300">rate</span> : "—"}
+      </span>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DealFitPage() {
@@ -334,17 +394,34 @@ export default function DealFitPage() {
     const res  = await fetch("/api/dealfit/deals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codeName, vertical: "" }),
+      body: JSON.stringify({ codeName, vertical: "", submittedBy: myHandle || null }),
     });
     const data = await res.json().catch(() => ({}));
     if (data.deal) {
-      const newDeal = { ...data.deal, interests: [] } as Deal;
-      setDeals(prev => [newDeal, ...prev]);
+      const newDeal = { ...data.deal, interests: [], ratings: [] } as Deal;
+      setDeals(prev => [...prev, newDeal]); // append (table sorted asc by seqNum)
       setNewDealId(data.deal.id);
       setTimeout(() => setNewDealId(null), 3000);
       setFilterStatus(""); // show all so new row is visible
       startEdit(data.deal.id, "vertical", "");
     }
+  };
+
+  // Rate a deal (1–5, or 0 to clear)
+  const handleRate = async (dealId: string, rating: number) => {
+    if (!myHandle) { setTab("profile"); return; }
+    // Optimistic update
+    setDeals(prev => prev.map(d => {
+      if (d.id !== dealId) return d;
+      const others = d.ratings.filter(r => r.handle !== myHandle);
+      const ratings = rating === 0 ? others : [...others, { handle: myHandle, rating }];
+      return { ...d, ratings };
+    }));
+    await fetch("/api/dealfit/rating", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dealId, handle: myHandle, rating }),
+    });
   };
 
   // Cycle status on click
@@ -554,24 +631,27 @@ export default function DealFitPage() {
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
                     {[
-                      { label: "Code Name",    cls: "w-[130px] min-w-[110px]" },
+                      { label: "#",            cls: "w-[36px]  min-w-[30px] text-right" },
+                      { label: "Code Name",    cls: "w-[120px] min-w-[100px]" },
+                      { label: "By",           cls: "w-[90px]  min-w-[70px]" },
                       { label: "Vertical",     cls: "w-[130px] min-w-[110px]" },
-                      { label: "End Market",   cls: "w-[120px] min-w-[100px]" },
+                      { label: "End Market",   cls: "w-[110px] min-w-[90px]" },
                       { label: "Stage",        cls: "w-[90px]  min-w-[80px]" },
-                      { label: "ARR",          cls: "w-[70px]  min-w-[60px] text-right" },
-                      { label: "YoY Gr%",      cls: "w-[65px]  min-w-[55px] text-right" },
-                      { label: "Raised",       cls: "w-[70px]  min-w-[60px] text-right" },
-                      { label: "NDR%",         cls: "w-[60px]  min-w-[50px] text-right" },
-                      { label: "GDR%",         cls: "w-[60px]  min-w-[50px] text-right" },
-                      { label: "EBITDA",       cls: "w-[70px]  min-w-[60px] text-right" },
-                      { label: "Cust.",        cls: "w-[55px]  min-w-[45px] text-right" },
-                      { label: "ACV",          cls: "w-[65px]  min-w-[55px] text-right" },
-                      { label: "Description",  cls: "w-[160px] min-w-[120px]" },
-                      { label: "Status",       cls: "w-[80px]  min-w-[70px]" },
-                      ...(profile ? [{ label: "Fit", cls: "w-[60px] min-w-[50px] text-right" }] : []),
-                      { label: "🤍",           cls: "w-[50px]  min-w-[40px] text-center" },
-                      { label: "Added",        cls: "w-[65px]  min-w-[55px] text-right" },
-                      { label: "",             cls: "w-[32px]" },
+                      { label: "ARR",          cls: "w-[65px]  min-w-[55px] text-right" },
+                      { label: "YoY Gr%",      cls: "w-[60px]  min-w-[50px] text-right" },
+                      { label: "Raised",       cls: "w-[65px]  min-w-[55px] text-right" },
+                      { label: "NDR%",         cls: "w-[55px]  min-w-[45px] text-right" },
+                      { label: "GDR%",         cls: "w-[55px]  min-w-[45px] text-right" },
+                      { label: "EBITDA",       cls: "w-[65px]  min-w-[55px] text-right" },
+                      { label: "Cust.",        cls: "w-[50px]  min-w-[40px] text-right" },
+                      { label: "ACV",          cls: "w-[60px]  min-w-[50px] text-right" },
+                      { label: "Description",  cls: "w-[150px] min-w-[110px]" },
+                      { label: "Status",       cls: "w-[75px]  min-w-[65px]" },
+                      { label: "Rating",       cls: "w-[80px]  min-w-[70px] text-center" },
+                      ...(profile ? [{ label: "Fit", cls: "w-[50px] min-w-[44px] text-right" }] : []),
+                      { label: "🤍",           cls: "w-[44px]  min-w-[36px] text-center" },
+                      { label: "Added",        cls: "w-[60px]  min-w-[50px] text-right" },
+                      { label: "",             cls: "w-[28px]" },
                     ].map((h, i) => (
                       <th key={i} className={`px-2 py-2.5 text-left font-semibold text-slate-500 uppercase tracking-wide text-[10px] select-none ${h.cls}`}>
                         {h.label}
@@ -590,9 +670,21 @@ export default function DealFitPage() {
                           isNew ? "bg-blue-50/60" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
                         } hover:bg-blue-50/30`}>
 
+                        {/* # */}
+                        <td className="px-2 py-0.5 text-right text-[11px] font-mono text-slate-400 select-none">
+                          {deal.seqNum}
+                        </td>
+
                         {/* Code Name */}
                         <td className="px-1 py-0.5">
                           <CellText id={deal.id} field="codeName" value={deal.codeName} {...cp} />
+                        </td>
+
+                        {/* Submitted By */}
+                        <td className="px-2 py-0.5">
+                          {deal.submittedBy
+                            ? <span className="text-[11px] text-slate-500 truncate block max-w-[80px]" title={deal.submittedBy}>{deal.submittedBy}</span>
+                            : <span className="text-slate-200 text-[11px]">—</span>}
                         </td>
 
                         {/* Vertical */}
@@ -661,6 +753,11 @@ export default function DealFitPage() {
                             className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold transition-opacity hover:opacity-75 ${STATUS_CLS[deal.status] ?? STATUS_CLS.ACTIVE}`}>
                             {deal.status}
                           </button>
+                        </td>
+
+                        {/* Rating */}
+                        <td className="px-0 py-0.5">
+                          <RatingCell deal={deal} myHandle={myHandle} onRate={handleRate} />
                         </td>
 
                         {/* Fit score */}

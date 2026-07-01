@@ -422,24 +422,39 @@ model CompanyResearch {
 
 model SharedDeal {
   id            String   @id @default(cuid())
-  codeName      String                         // e.g. "Project Aurora"
+  seqNum        Int      @default(autoincrement()) // display ID: 1, 2, 3…
+  submittedBy   String?                            // handle of the submitter
+  codeName      String                             // e.g. "Project Aurora"
   vertical      String   @default("")
   endMarket     String?
   description   String?
   stage         String?
-  arrM          Float?                         // ARR $M
-  yoyGrowth     Float?                         // YoY growth %
-  totalRaisedM  Float?                         // lifetime capital raised $M
-  ndr           Float?                         // Net Dollar Retention %
-  gdr           Float?                         // Gross Dollar Retention %
-  ltmEbitdaM    Float?                         // negative = burn
+  arrM          Float?                             // ARR $M
+  yoyGrowth     Float?                             // YoY growth %
+  totalRaisedM  Float?                             // lifetime capital raised $M
+  ndr           Float?                             // Net Dollar Retention %
+  gdr           Float?                             // Gross Dollar Retention %
+  ltmEbitdaM    Float?                             // negative = burn
   customerCount Int?
-  acvK          Float?                         // Average Contract Value $K
-  status        String   @default("ACTIVE")    // ACTIVE | CLOSED | MATCHED
+  acvK          Float?                             // Average Contract Value $K
+  status        String   @default("ACTIVE")        // ACTIVE | CLOSED | MATCHED
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   interests     DealInterest[]
+  ratings       DealRating[]
+}
+
+model DealRating {
+  id        String     @id @default(cuid())
+  dealId    String
+  deal      SharedDeal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  handle    String                               // anonymous handle of rater
+  rating    Int                                  // 1–5
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([dealId, handle])
 }
 
 model InvestorProfile {
