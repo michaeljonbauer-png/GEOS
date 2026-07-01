@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, type ReactNode } from "react";
 import {
   Plus, X, Check, ChevronDown, ChevronUp, Search, Zap,
-  Heart, HeartOff, ArrowUpRight, AlertCircle, Info,
+  Heart, AlertCircle, Info,
   Shuffle, Users, TrendingUp, DollarSign,
 } from "lucide-react";
 
