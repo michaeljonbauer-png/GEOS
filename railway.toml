@@ -3,10 +3,7 @@ builder = "nixpacks"
 buildCommand = "npm run build"
 
 [deploy]
-# Seed is demo-data only and must never block startup — if it fails, the app
-# still starts. Previously a seed failure broke the && chain and Railway kept
-# serving the last healthy (stale) deploy.
-startCommand = "npx prisma db push || true; (npx tsx prisma/seed.ts || echo 'seed skipped'); npm run start"
+startCommand = "npx prisma db push || true; (npx tsx prisma/clear-demo.ts || echo 'clear-demo skipped'); npm run start"
 healthcheckPath = "/"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
