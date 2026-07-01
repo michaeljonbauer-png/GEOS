@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-  Sparkles, ThumbsDown, ExternalLink, Radar, Send, Building2,
+  Sparkles, ThumbsDown, ExternalLink, Radar, Send, Building2, BookmarkPlus,
   RotateCcw, ChevronDown, ChevronUp, Search, History, Trash2, Clock, ArrowRight, Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,27 +44,32 @@ function formatDate(iso: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function HuntCard({ result, onOpenDetail, onAdd, onDismiss, onScout, adding, dismissed, addedId }: {
+function HuntCard({ result, onOpenDetail, onAdd, onSave, onDismiss, onScout, adding, dismissed, addedId, addedType }: {
   result: HuntResult;
   onOpenDetail: () => void;
   onAdd: () => void;
+  onSave: () => void;
   onDismiss: () => void;
   onScout: () => void;
   adding: boolean;
   dismissed: boolean;
   addedId: string | null;
+  addedType: "pipeline" | "watchlist" | null;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   if (addedId) {
+    const isPipeline = addedType === "pipeline";
     return (
-      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3">
+      <div className={`border rounded-xl p-4 flex items-center justify-between gap-3 ${isPipeline ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"}`}>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-emerald-800 truncate">{result.name}</p>
-          <p className="text-xs text-emerald-600 mt-0.5">Added to pipeline</p>
+          <p className={`text-sm font-semibold truncate ${isPipeline ? "text-emerald-800" : "text-slate-700"}`}>{result.name}</p>
+          <p className={`text-xs mt-0.5 ${isPipeline ? "text-emerald-600" : "text-slate-500"}`}>
+            {isPipeline ? "Added to pipeline" : "Saved to Companies"}
+          </p>
         </div>
-        <Link href={`/companies/${addedId}`} className="flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900 shrink-0">
-          View full profile <ArrowRight size={12} />
+        <Link href={`/companies/${addedId}`} className={`flex items-center gap-1 text-xs font-medium shrink-0 ${isPipeline ? "text-emerald-700 hover:text-emerald-900" : "text-slate-600 hover:text-slate-900"}`}>
+          View profile <ArrowRight size={12} />
         </Link>
       </div>
     );
@@ -133,8 +138,11 @@ function HuntCard({ result, onOpenDetail, onAdd, onDismiss, onScout, adding, dis
         <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs" onClick={onOpenDetail}>
           <Search size={12} className="mr-1" />View details & fit
         </Button>
-        <Button size="sm" variant="outline" className="px-2.5 text-blue-600 border-blue-200 hover:bg-blue-50" onClick={onAdd} disabled={adding} title="Add to pipeline">
+        <Button size="sm" variant="outline" className="px-2.5 text-blue-600 border-blue-200 hover:bg-blue-50" onClick={onAdd} disabled={adding} title="Add to pipeline (active opp)">
           <Building2 size={12} />
+        </Button>
+        <Button size="sm" variant="outline" className="px-2.5 text-slate-500 border-slate-200 hover:bg-slate-50" onClick={onSave} disabled={adding} title="Save to Companies (watchlist — not pipeline)">
+          <BookmarkPlus size={12} />
         </Button>
         <Button size="sm" variant="outline" className="px-2.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50" onClick={onScout} title="Research in Scout">
           <ExternalLink size={12} />
@@ -155,7 +163,7 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
   const [loading, setLoading] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-  const [addedCompanies, setAddedCompanies] = useState<Map<string, string>>(new Map());
+  const [addedCompanies, setAddedCompanies] = useState<Map<string, { id: string; type: "pipeline" | "watchlist" }>>(new Map());
   const [previewResult, setPreviewResult] = useState<HuntResult | null>(null);
   const [history, setHistory] = useState<HuntSessionMeta[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -226,12 +234,13 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
     } finally { setLoading(false); }
   };
 
-  const addToPipeline = async (result: HuntResult): Promise<string | null> => {
+  const addCompany = async (result: HuntResult, type: "pipeline" | "watchlist"): Promise<string | null> => {
     setAddingId(result.name);
     try {
+      const status = type === "pipeline" ? "IDENTIFIED" : "WATCHLIST";
       const res = await fetch("/api/companies", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: result.name, website: result.website, description: result.description, sector: result.sector, subSector: result.subSector, geography: result.geography, founded: result.founded, stage: result.stage, totalFundingM: result.totalFundingM, employees: result.employees, arrEstimate: result.arrEstimate, arrGrowth: result.arrGrowth, nrrEstimate: result.nrrEstimate, grossMargin: result.grossMargin, status: "IDENTIFIED", priority: "MEDIUM", source: `Hunt: ${lastQuery}`, recommendationScore: result.huntScore, recommendationRationale: result.huntRationale }),
+        body: JSON.stringify({ name: result.name, website: result.website, description: result.description, sector: result.sector, subSector: result.subSector, geography: result.geography, founded: result.founded, stage: result.stage, totalFundingM: result.totalFundingM, employees: result.employees, arrEstimate: result.arrEstimate, arrGrowth: result.arrGrowth, nrrEstimate: result.nrrEstimate, grossMargin: result.grossMargin, status, priority: "MEDIUM", source: `Hunt: ${lastQuery}`, recommendationScore: result.huntScore, recommendationRationale: result.huntRationale }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -239,11 +248,11 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
         if (search.ok) {
           const existing: Array<{ id: string; name: string }> = await search.json();
           const match = existing.find(c => c.name.toLowerCase() === result.name.toLowerCase());
-          if (match) { const m = new Map(addedCompanies); m.set(result.name, match.id); setAddedCompanies(m); return match.id; }
+          if (match) { const m = new Map(addedCompanies); m.set(result.name, { id: match.id, type }); setAddedCompanies(m); return match.id; }
         }
         throw new Error(data.error ?? "Server error");
       }
-      const m = new Map(addedCompanies); m.set(result.name, data.id); setAddedCompanies(m);
+      const m = new Map(addedCompanies); m.set(result.name, { id: data.id, type }); setAddedCompanies(m);
       // Auto-create founder/CEO contact if available
       if (result.founderName) {
         const parts = result.founderName.trim().split(/\s+/);
@@ -258,10 +267,10 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
           }),
         }).catch(() => { /* non-fatal */ });
       }
-      toast({ title: `${result.name} added to pipeline` });
+      toast({ title: type === "pipeline" ? `${result.name} added to pipeline` : `${result.name} saved to Companies` });
       return data.id;
     } catch (err) {
-      toast({ title: "Failed to add company", description: err instanceof Error ? err.message : "Network error", variant: "destructive" });
+      toast({ title: "Failed to save company", description: err instanceof Error ? err.message : "Network error", variant: "destructive" });
       return null;
     } finally { setAddingId(null); }
   };
@@ -274,7 +283,9 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
 
   const hasResults = results.length > 0;
   const visibleCount = results.filter(r => !dismissed.has(r.name) || addedCompanies.has(r.name)).length;
-  const previewAddedId = previewResult ? (addedCompanies.get(previewResult.name) ?? null) : null;
+  const previewAdded = previewResult ? (addedCompanies.get(previewResult.name) ?? null) : null;
+  const previewAddedId = previewAdded?.id ?? null;
+  const previewAddedType = previewAdded?.type ?? null;
 
   return (
     <div>
@@ -331,12 +342,14 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
                 key={result.name}
                 result={result}
                 onOpenDetail={() => setPreviewResult(result)}
-                onAdd={() => addToPipeline(result)}
+                onAdd={() => addCompany(result, "pipeline")}
+                onSave={() => addCompany(result, "watchlist")}
                 onDismiss={() => { const s = new Set(dismissed); s.add(result.name); setDismissed(s); }}
                 onScout={() => onScout?.(result.name)}
                 adding={addingId === result.name}
                 dismissed={dismissed.has(result.name)}
-                addedId={addedCompanies.get(result.name) ?? null}
+                addedId={addedCompanies.get(result.name)?.id ?? null}
+                addedType={addedCompanies.get(result.name)?.type ?? null}
               />
             ))}
           </div>
@@ -414,11 +427,10 @@ export function HuntTab({ onScout }: { onScout?: (name: string) => void }) {
         open={!!previewResult}
         onClose={() => setPreviewResult(null)}
         addedId={previewAddedId}
+        addedType={previewAddedType}
         adding={addingId === previewResult?.name}
-        onAdd={async () => {
-          if (!previewResult) return;
-          await addToPipeline(previewResult);
-        }}
+        onAdd={async () => { if (previewResult) await addCompany(previewResult, "pipeline"); }}
+        onSave={async () => { if (previewResult) await addCompany(previewResult, "watchlist"); }}
       />
     </div>
   );

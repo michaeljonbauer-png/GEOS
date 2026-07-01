@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  TrendingUp, Users, DollarSign, ExternalLink, Building2, ArrowRight,
+  TrendingUp, Users, DollarSign, ExternalLink, Building2, BookmarkPlus, ArrowRight,
   ShieldCheck, CheckCircle2, XCircle, HelpCircle, Zap, Loader2, Sparkles, Send,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -213,15 +213,19 @@ export function CompanyPreviewModal({
   open,
   onClose,
   addedId,
+  addedType,
   adding,
   onAdd,
+  onSave,
 }: {
   company: CompanyPreviewData | null;
   open: boolean;
   onClose: () => void;
   addedId: string | null;
+  addedType?: "pipeline" | "watchlist" | null;
   adding: boolean;
   onAdd: () => void;
+  onSave?: () => void;
 }) {
   if (!company) return null;
 
@@ -284,26 +288,43 @@ export function CompanyPreviewModal({
         <div className="flex gap-2 pt-4 border-t border-slate-100">
           {addedId ? (
             <>
-              <Link href={`/outreach?companyId=${addedId}`} className="flex-1" onClick={onClose}>
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
-                  <Send size={14} /> Draft outreach
-                </Button>
-              </Link>
-              <Link href={`/companies/${addedId}`} onClick={onClose}>
-                <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
+              {addedType !== "watchlist" && (
+                <Link href={`/outreach?companyId=${addedId}`} className="flex-1" onClick={onClose}>
+                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+                    <Send size={14} /> Draft outreach
+                  </Button>
+                </Link>
+              )}
+              <Link href={`/companies/${addedId}`} onClick={onClose} className={addedType === "watchlist" ? "flex-1" : ""}>
+                <Button variant="outline" size="sm" className={`gap-1.5 ${addedType === "watchlist" ? "w-full" : "shrink-0"}`}>
                   Full profile <ArrowRight size={13} />
                 </Button>
               </Link>
             </>
           ) : (
-            <Button
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-              onClick={onAdd}
-              disabled={adding}
-            >
-              <Building2 size={14} className="mr-1.5" />
-              {adding ? "Adding…" : "Add to pipeline"}
-            </Button>
+            <>
+              <Button
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={onAdd}
+                disabled={adding}
+                title="Add as an active pipeline opportunity"
+              >
+                <Building2 size={14} className="mr-1.5" />
+                {adding ? "Adding…" : "Add to Pipeline"}
+              </Button>
+              {onSave && (
+                <Button
+                  variant="outline"
+                  className="flex-1 border-slate-300 text-slate-600 hover:bg-slate-50"
+                  onClick={onSave}
+                  disabled={adding}
+                  title="Save to Companies for reference — not an active pipeline opp"
+                >
+                  <BookmarkPlus size={14} className="mr-1.5" />
+                  Save to Companies
+                </Button>
+              )}
+            </>
           )}
           {company.website && (
             <a href={company.website} target="_blank" rel="noopener noreferrer">

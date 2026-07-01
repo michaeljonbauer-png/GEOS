@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Sparkles, ThumbsUp, ThumbsDown, RefreshCw,
+  Sparkles, ThumbsUp, ThumbsDown, RefreshCw, BookmarkPlus,
   AlertCircle, Search, ChevronDown, ChevronUp, CheckCircle2, XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -64,8 +64,8 @@ function SkeletonCard() {
   );
 }
 
-function LeadCard({ lead, onPursue, onPass, onRefresh, processing, refreshing }: {
-  lead: Lead; onPursue: () => void; onPass: () => void; onRefresh: () => void;
+function LeadCard({ lead, onPursue, onSave, onPass, onRefresh, processing, refreshing }: {
+  lead: Lead; onPursue: () => void; onSave: () => void; onPass: () => void; onRefresh: () => void;
   processing: boolean; refreshing: boolean;
 }) {
   const router = useRouter();
@@ -107,7 +107,8 @@ function LeadCard({ lead, onPursue, onPass, onRefresh, processing, refreshing }:
           {refreshing ? "Verifying with live web data…" : "Refresh with live web data"}
         </button>
         <div className="flex gap-2">
-          <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs" onClick={onPursue}><ThumbsUp size={12} className="mr-1" />Pursue</Button>
+          <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs" onClick={onPursue} title="Add to pipeline as active opp"><ThumbsUp size={12} className="mr-1" />Pursue</Button>
+          <Button size="sm" variant="outline" className="px-2.5 text-slate-500 border-slate-200 hover:bg-slate-50" onClick={onSave} title="Save to Companies (watchlist — not pipeline)"><BookmarkPlus size={12} /></Button>
           <Button size="sm" variant="outline" className="flex-1 text-red-500 hover:bg-red-50 border-red-200 text-xs" onClick={onPass}><ThumbsDown size={12} className="mr-1" />Pass</Button>
         </div>
       </div>
@@ -181,13 +182,18 @@ export function LeadsTab() {
     } finally { setRefreshingId(null); }
   };
 
-  const processLead = async (lead: Lead, action: "pursue" | "pass") => {
+  const processLead = async (lead: Lead, action: "pursue" | "save" | "pass") => {
     setProcessingId(lead.id);
     try {
       const res = await fetch(`/api/leads/${lead.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
       if (!res.ok) throw new Error();
       setLeads(prev => prev.filter(l => l.id !== lead.id));
-      toast({ title: action === "pursue" ? `${lead.name} added to pipeline` : `Passed on ${lead.name}`, description: action === "pursue" ? "Now visible in Companies as Identified." : "Feedback recorded — finding a replacement…" });
+      const msg = action === "pursue"
+        ? { title: `${lead.name} added to pipeline`, description: "Now visible in Companies as Identified." }
+        : action === "save"
+        ? { title: `${lead.name} saved to Companies`, description: "Stored as Watchlist — not an active pipeline opp." }
+        : { title: `Passed on ${lead.name}`, description: "Feedback recorded — finding a replacement…" };
+      toast(msg);
       topUp();
     } catch { toast({ title: "Action failed", variant: "destructive" }); }
     finally { setProcessingId(null); }
@@ -235,7 +241,7 @@ export function LeadsTab() {
       {(leads.length > 0 || generating) && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {leads.map(lead => (
-            <LeadCard key={lead.id} lead={lead} onPursue={() => processLead(lead, "pursue")} onPass={() => processLead(lead, "pass")} onRefresh={() => refreshLead(lead)} processing={processingId === lead.id} refreshing={refreshingId === lead.id} />
+            <LeadCard key={lead.id} lead={lead} onPursue={() => processLead(lead, "pursue")} onSave={() => processLead(lead, "save")} onPass={() => processLead(lead, "pass")} onRefresh={() => refreshLead(lead)} processing={processingId === lead.id} refreshing={refreshingId === lead.id} />
           ))}
           {Array.from({ length: skeletonCount }).map((_, i) => <SkeletonCard key={`sk-${i}`} />)}
         </div>

@@ -6,9 +6,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { action, notes } = await req.json() as { action: "pursue" | "pass"; notes?: string };
+  const { action, notes } = await req.json() as { action: "pursue" | "save" | "pass"; notes?: string };
 
-  const newStatus = action === "pursue" ? "IDENTIFIED" : "PASSED";
+  const newStatus = action === "pursue" ? "IDENTIFIED" : action === "save" ? "WATCHLIST" : "PASSED";
 
   const company = await db.company.update({
     where: { id: params.id },
