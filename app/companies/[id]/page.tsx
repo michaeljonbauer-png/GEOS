@@ -15,7 +15,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import ThesisFitPanel from "@/components/companies/ThesisFitPanel";
-import FeedbackButton from "@/components/companies/FeedbackButton";
 import ResearchTab from "@/components/companies/ResearchTab";
 import SourceBadge from "@/components/companies/SourceBadge";
 import CustomFieldsSection from "@/components/companies/CustomFieldsSection";
@@ -27,15 +26,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Separator } from "@/components/ui/separator";
 import {
   getStatusConfig, formatARR, formatGrowth, scoreColor, scoreBg,
-  COMPANY_STATUSES, SECTORS, STAGES, INTERACTION_TYPES,
+  COMPANY_STATUSES, SECTORS, STAGES, INTERACTION_TYPES, PRIORITIES,
 } from "@/lib/utils";
 import { computeUnderwriteScore, KPI_DEFINITIONS, type KPIScore } from "@/lib/underwrite-scoring";
 
-const PRIORITIES = [
-  { value: "HIGH", label: "High", color: "bg-red-100 text-red-700 border-red-300" },
-  { value: "MEDIUM", label: "Medium", color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
-  { value: "LOW", label: "Low", color: "bg-slate-100 text-slate-600 border-slate-300" },
-];
 import { useToast } from "@/components/ui/use-toast";
 
 interface ScoreDetail {
@@ -122,7 +116,6 @@ interface Company {
   interactions: Interaction[];
   scoreDetails: ScoreDetail[];
   notes: Note[];
-  feedback?: { signal: string }[];
 }
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
@@ -397,11 +390,6 @@ export default function CompanyDetailPage() {
             </>
           ) : (
             <>
-              <FeedbackButton
-                companyId={company.id}
-                source="detail"
-                currentSignal={company.feedback?.[0]?.signal as import("@/lib/thesis").FeedbackSignal | undefined}
-              />
               <Button
                 variant="outline"
                 size="sm"

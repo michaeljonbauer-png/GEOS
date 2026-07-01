@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { COMPANY_STATUSES, SECTORS, STAGES } from "@/lib/utils";
+import { COMPANY_STATUSES, SECTORS, STAGES, PRIORITIES } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function NewCompanyPage() {
@@ -39,7 +39,7 @@ export default function NewCompanyPage() {
     founded: "",
     stage: "",
     status: "IDENTIFIED",
-    priority: "MEDIUM",
+    priority: "UNKNOWN",
     source: "",
     linkedinUrl: "",
     crunchbaseUrl: "",
@@ -284,9 +284,9 @@ export default function NewCompanyPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="HIGH">High</SelectItem>
-                    <SelectItem value="MEDIUM">Medium</SelectItem>
-                    <SelectItem value="LOW">Low</SelectItem>
+                    {PRIORITIES.map(p => (
+                      <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

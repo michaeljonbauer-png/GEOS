@@ -8,9 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getStatusConfig, formatARR, formatGrowth, scoreColor, COMPANY_STATUSES, SECTORS } from "@/lib/utils";
-import FeedbackButton from "@/components/companies/FeedbackButton";
-import type { FeedbackSignal } from "@/lib/thesis";
+import { getStatusConfig, getPriorityConfig, formatARR, formatGrowth, scoreColor, COMPANY_STATUSES, SECTORS } from "@/lib/utils";
 
 interface Company {
   id: string;
@@ -26,15 +24,8 @@ interface Company {
   thesisFitScore: number | null;
   updatedAt: string;
   contacts: { firstName: string; lastName: string }[];
-  feedback: { signal: string }[];
   _count: { interactions: number; contacts: number };
 }
-
-const PRIORITY_COLOR: Record<string, string> = {
-  HIGH: "bg-red-100 text-red-700",
-  MEDIUM: "bg-yellow-100 text-yellow-700",
-  LOW: "bg-slate-100 text-slate-600",
-};
 
 function CompaniesPage() {
   const router = useRouter();
@@ -68,6 +59,19 @@ function CompaniesPage() {
     const timer = setTimeout(fetchCompanies, 200);
     return () => clearTimeout(timer);
   }, [fetchCompanies]);
+
+  const cyclePriority = async (e: React.MouseEvent, co: Company) => {
+    e.stopPropagation();
+    const { PRIORITIES } = await import("@/lib/utils");
+    const idx = PRIORITIES.findIndex(p => p.value === co.priority);
+    const next = PRIORITIES[(idx + 1) % PRIORITIES.length].value;
+    setCompanies(prev => prev.map(c => c.id === co.id ? { ...c, priority: next } : c));
+    await fetch(`/api/companies/${co.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ priority: next }),
+    });
+  };
 
   const toggleSort = (col: string) => {
     if (sortBy === col) {
@@ -195,7 +199,7 @@ function CompaniesPage() {
                 Activity
               </th>
               <th className="px-4 py-3 font-medium text-slate-600 text-center">
-                Rate
+                Priority
               </th>
             </tr>
           </thead>
@@ -225,26 +229,19 @@ function CompaniesPage() {
                     onClick={() => router.push(`/companies/${co.id}`)}
                   >
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div>
-                          <p className="font-medium text-slate-900">{co.name}</p>
-                          {co.website && (
-                            <a
-                              href={co.website}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-slate-400 hover:text-blue-600 flex items-center gap-0.5"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {co.website.replace(/^https?:\/\//, "")}
-                              <ExternalLink size={10} />
-                            </a>
-                          )}
-                        </div>
-                        {co.priority === "HIGH" && (
-                          <Badge className="bg-red-100 text-red-700 border-0 text-[10px] px-1.5 py-0">
-                            High
-                          </Badge>
+                      <div>
+                        <p className="font-medium text-slate-900">{co.name}</p>
+                        {co.website && (
+                          <a
+                            href={co.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-slate-400 hover:text-blue-600 flex items-center gap-0.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {co.website.replace(/^https?:\/\//, "")}
+                            <ExternalLink size={10} />
+                          </a>
                         )}
                       </div>
                     </td>
@@ -300,21 +297,18 @@ function CompaniesPage() {
                       {co._count.interactions}
                     </td>
                     <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      <FeedbackButton
-                        companyId={co.id}
-                        compact
-                        source="list"
-                        currentSignal={co.feedback?.[0]?.signal as FeedbackSignal | undefined}
-                        onSaved={() => {
-                          setCompanies((prev) =>
-                            prev.map((c) =>
-                              c.id === co.id
-                                ? { ...c, feedback: [{ signal: co.feedback?.[0]?.signal ?? "" }] }
-                                : c
-                            )
-                          );
-                        }}
-                      />
+                      {(() => {
+                        const p = getPriorityConfig(co.priority);
+                        return (
+                          <button
+                            onClick={(e) => cyclePriority(e, co)}
+                            title="Click to cycle priority"
+                            className={`text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors hover:opacity-80 ${p.color}`}
+                          >
+                            {p.label}
+                          </button>
+                        );
+                      })()}
                     </td>
                   </tr>
                 );

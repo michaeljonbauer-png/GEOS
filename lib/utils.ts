@@ -60,6 +60,18 @@ export const STAGES = [
   "Growth",
 ] as const;
 
+export const PRIORITIES = [
+  { value: "CONVICTION", label: "Conviction", color: "bg-violet-100 text-violet-700 border-violet-300", dot: "bg-violet-500" },
+  { value: "HIGH",       label: "High",       color: "bg-red-100 text-red-700 border-red-300",         dot: "bg-red-500"    },
+  { value: "MEDIUM",     label: "Medium",     color: "bg-amber-100 text-amber-700 border-amber-300",   dot: "bg-amber-400"  },
+  { value: "LOW",        label: "Low",        color: "bg-slate-100 text-slate-500 border-slate-300",   dot: "bg-slate-300"  },
+  { value: "UNKNOWN",    label: "Unknown",    color: "bg-slate-50 text-slate-400 border-slate-200",    dot: "bg-slate-200"  },
+];
+
+export function getPriorityConfig(priority: string) {
+  return PRIORITIES.find(p => p.value === priority) ?? PRIORITIES[PRIORITIES.length - 1];
+}
+
 export function getStatusConfig(status: string) {
   return (
     COMPANY_STATUSES.find((s) => s.value === status) ?? COMPANY_STATUSES[0]

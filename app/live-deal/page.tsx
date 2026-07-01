@@ -29,7 +29,8 @@ const STATUS_ICON: Record<string, React.ReactNode> = {
   BLOCKED:     <AlertCircle size={14} className="text-red-500" />,
 };
 const PRIORITY_COLOR: Record<string, string> = {
-  HIGH: "text-red-600", MEDIUM: "text-amber-600", LOW: "text-gray-400",
+  CONVICTION: "text-violet-700", HIGH: "text-red-600", MEDIUM: "text-amber-600",
+  LOW: "text-gray-400", UNKNOWN: "text-gray-300",
 };
 
 const DEFAULT_DD_TASKS: { title: string; workstream: typeof WORKSTREAMS[number] }[] = [

@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         employees: employees ? Number(employees) : null,
         founded: founded ? Number(founded) : null,
         stage, status: status ?? "IDENTIFIED",
-        priority: priority ?? "MEDIUM",
+        priority: priority ?? "UNKNOWN",
         source, linkedinUrl, crunchbaseUrl,
         recommendationScore: recommendationScore != null ? Number(recommendationScore) : null,
         recommendationRationale: recommendationRationale ?? null,

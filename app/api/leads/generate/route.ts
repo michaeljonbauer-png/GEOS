@@ -277,7 +277,7 @@ SCORING: score each criterion 0-100. met=true if clearly satisfied. recommendati
             nrrEstimate: c.nrrEstimate ?? null,
             grossMargin: c.grossMargin ?? null,
             status: "LEAD",
-            priority: "MEDIUM",
+            priority: "UNKNOWN",
             source: c.source ?? "AI recommendation — verify via Refresh",
             recommendationRationale: c.recommendationRationale ?? null,
             recommendationScore: c.recommendationScore ?? null,

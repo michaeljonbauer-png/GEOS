@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { formatARR, formatGrowth, getStatusConfig, scoreColor, PIPELINE_STAGES } from "@/lib/utils";
+import { formatARR, formatGrowth, getStatusConfig, scoreColor, getPriorityConfig, PIPELINE_STAGES } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
 interface Company {
@@ -27,11 +27,6 @@ const STAGE_CONFIG: Record<string, { label: string; color: string; headerBg: str
   DUE_DILIGENCE: { label: "Due Diligence", color: "border-indigo-200", headerBg: "bg-indigo-50" },
 };
 
-const PRIORITY_DOT: Record<string, string> = {
-  HIGH: "bg-red-500",
-  MEDIUM: "bg-yellow-400",
-  LOW: "bg-slate-300",
-};
 
 export default function PipelinePage() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -144,8 +139,8 @@ export default function PipelinePage() {
                           {company.name}
                         </p>
                         <div
-                          className={`w-2 h-2 rounded-full shrink-0 mt-1 ${PRIORITY_DOT[company.priority] ?? "bg-slate-300"}`}
-                          title={`${company.priority} priority`}
+                          className={`w-2 h-2 rounded-full shrink-0 mt-1 ${getPriorityConfig(company.priority).dot}`}
+                          title={`${getPriorityConfig(company.priority).label} priority`}
                         />
                       </div>
                     </Link>
