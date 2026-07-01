@@ -418,6 +418,58 @@ model CompanyResearch {
   updatedAt      DateTime @updatedAt
 }
 
+// ── DealFit — anonymous cross-firm deal sharing ───────────────────────────────
+
+model SharedDeal {
+  id            String   @id @default(cuid())
+  codeName      String                         // e.g. "Project Aurora"
+  vertical      String   @default("")
+  endMarket     String?
+  description   String?
+  stage         String?
+  arrM          Float?                         // ARR $M
+  yoyGrowth     Float?                         // YoY growth %
+  totalRaisedM  Float?                         // lifetime capital raised $M
+  ndr           Float?                         // Net Dollar Retention %
+  gdr           Float?                         // Gross Dollar Retention %
+  ltmEbitdaM    Float?                         // negative = burn
+  customerCount Int?
+  acvK          Float?                         // Average Contract Value $K
+  status        String   @default("ACTIVE")    // ACTIVE | CLOSED | MATCHED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  interests     DealInterest[]
+}
+
+model InvestorProfile {
+  id           String   @id @default(cuid())
+  handle       String   @unique                // anonymous firm handle
+  minArrM      Float?
+  maxArrM      Float?
+  minYoyGrowth Float?
+  maxRaisedM   Float?
+  minGdr       Float?
+  minNdr       Float?
+  verticals    String   @default("[]")         // JSON string[]
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  interests    DealInterest[]
+}
+
+model DealInterest {
+  id        String          @id @default(cuid())
+  dealId    String
+  deal      SharedDeal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  handle    String
+  investor  InvestorProfile @relation(fields: [handle], references: [handle], onDelete: Cascade)
+  createdAt DateTime        @default(now())
+
+  @@unique([dealId, handle])
+}
+
 model HuntSession {
   id          String   @id @default(cuid())
   type        String   @default("HUNT")

@@ -16,6 +16,7 @@ import {
   Users,
   Sparkles,
   Calculator,
+  Zap,
   Menu,
   X,
   type LucideIcon,
@@ -35,6 +36,7 @@ const mainItems = [
   { href: "/portfolio",    label: "Portfolio / Investments",icon: BarChart3  },
   { href: "/lp-reporting", label: "LP Comms / Reporting",   icon: Users      },
   { href: "/fund-model",   label: "GP Fund Model",          icon: Calculator },
+  { href: "/dealfit",      label: "DealFit",                icon: Zap        },
 ];
 
 export default function Sidebar() {
