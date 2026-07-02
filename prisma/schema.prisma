@@ -537,3 +537,22 @@ model UnderwriteComment {
   content      String
   createdAt    DateTime   @default(now())
 }
+
+// ── Sourcing Preferences (singleton — id is always "default") ─────────────────
+
+model SourcingPreferences {
+  id              String   @id @default("default")
+  businessModel   String   @default("B2B")    // B2B | B2C | Both
+  endMarkets      String   @default("[]")     // JSON: string[]
+  softwareType    String   @default("")
+  targetStages    String   @default("[]")     // JSON: string[]
+  minArrM         Float?
+  maxArrM         Float?
+  minEmployees    Int?
+  maxEmployees    Int?
+  maxFundingM     Float?
+  minFoundedYear  Int?
+  maxFoundedYear  Int?
+  additionalNotes String   @default("")
+  updatedAt       DateTime @updatedAt
+}

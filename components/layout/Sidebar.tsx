@@ -24,7 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const sourcingSubItems = [
-  { href: "/sourcing",  label: "Identification", icon: Sparkles },
+  { href: "/sourcing",  label: "Hunt",           icon: Sparkles },
   { href: "/crm",       label: "Activity",        icon: ActivitySquare },
   { href: "/outreach",  label: "Outreach",         icon: Send },
   { href: "/pipeline",  label: "Pipeline",         icon: GitMerge },

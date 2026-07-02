@@ -77,7 +77,7 @@ export async function POST() {
     }
 
     // ── Context ──────────────────────────────────────────────────────────────
-    const [thesisCriteria, existingCompanies, recentFeedback, pursuedCompanies] = await Promise.all([
+    const [thesisCriteria, existingCompanies, recentFeedback, pursuedCompanies, sourcingPrefs] = await Promise.all([
       db.thesisCriterion.findMany({ where: { isActive: true }, orderBy: { order: "asc" } }),
       db.company.findMany({ select: { name: true }, orderBy: { createdAt: "desc" }, take: 50 }),
       db.companyFeedback.findMany({
@@ -85,6 +85,7 @@ export async function POST() {
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
+      db.sourcingPreferences.findUnique({ where: { id: "default" } }).catch(() => null),
       // Pursued companies with scoring notes — these are your real signal of what you like
       db.company.findMany({
         where: { status: { in: ["IN_CONVERSATION", "DILIGENCE", "CLOSED_WON"] } },
@@ -131,6 +132,32 @@ export async function POST() {
       passed.length ? `Passed: ${passed.map(f => f.company.name).join(", ")}` : "",
     ].filter(Boolean).join(" | ");
 
+    // Build preferences summary for the Claude prompt
+    let prefsSummary = "";
+    if (sourcingPrefs) {
+      const parts: string[] = [];
+      if (sourcingPrefs.businessModel && sourcingPrefs.businessModel !== "Both") parts.push(`• Business model: ${sourcingPrefs.businessModel} only`);
+      const endMarkets = (() => { try { return JSON.parse(sourcingPrefs.endMarkets); } catch { return []; } })();
+      if (endMarkets.length) parts.push(`• Target end markets / industries: ${endMarkets.join(", ")}`);
+      if (sourcingPrefs.softwareType) parts.push(`• Software type: ${sourcingPrefs.softwareType}`);
+      const stages = (() => { try { return JSON.parse(sourcingPrefs.targetStages); } catch { return []; } })();
+      if (stages.length) parts.push(`• Target stages: ${stages.join(", ")}`);
+      if (sourcingPrefs.minArrM != null || sourcingPrefs.maxArrM != null) {
+        const lo = sourcingPrefs.minArrM != null ? `$${sourcingPrefs.minArrM}M` : null;
+        const hi = sourcingPrefs.maxArrM != null ? `$${sourcingPrefs.maxArrM}M` : null;
+        parts.push(`• ARR range: ${[lo, hi].filter(Boolean).join(" – ")}`);
+      }
+      if (sourcingPrefs.minEmployees != null || sourcingPrefs.maxEmployees != null) {
+        parts.push(`• Employees: ${sourcingPrefs.minEmployees ?? "any"}–${sourcingPrefs.maxEmployees ?? "any"}`);
+      }
+      if (sourcingPrefs.maxFundingM != null) parts.push(`• Max total funding raised: $${sourcingPrefs.maxFundingM}M`);
+      if (sourcingPrefs.minFoundedYear != null || sourcingPrefs.maxFoundedYear != null) {
+        parts.push(`• Founded: ${sourcingPrefs.minFoundedYear ?? "any"} – ${sourcingPrefs.maxFoundedYear ?? "present"}`);
+      }
+      if (sourcingPrefs.additionalNotes) parts.push(`• Additional: ${sourcingPrefs.additionalNotes}`);
+      prefsSummary = parts.join("\n");
+    }
+
     const today = new Date().toISOString().slice(0, 10);
 
     // ══ PHASE 1: Select + estimate (no web search — avoids rate limits) ═══════
@@ -167,7 +194,7 @@ SKIP (already in pipeline): ${existingNames}
 ${feedbackLine ? `\nINVESTOR FEEDBACK (use to calibrate): ${feedbackLine}` : ""}
 ${pursuedContext ? `\nCOMPANIES INVESTOR HAS PURSUED (pattern-match on these profiles when generating new leads):\n${pursuedContext}` : ""}
 
-Generate exactly ${toGenerate} companies. Prefer vertical/industry software, B2B enterprise/mid-market, founded 2018–2023, 15–250 employees. EXCLUDE: acquired, PE-owned, public, roll-up subsidiaries.
+${prefsSummary ? `INVESTOR SOURCING PREFERENCES (prioritize companies matching all of these):\n${prefsSummary}\n\n` : "Prefer vertical/industry software, B2B enterprise/mid-market, founded 2018–2023, 15–250 employees.\n\n"}Generate exactly ${toGenerate} companies. EXCLUDE: acquired, PE-owned, public, roll-up subsidiaries.
 
 For each company use your training knowledge to estimate metrics. Apply these ARR rules:
 - ARR = MAX(employees×$250K, totalFunding÷5, stage floor)
