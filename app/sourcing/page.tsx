@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Sparkles, ThumbsDown, ThumbsUp, ExternalLink, Building2, BookmarkPlus,
-  RotateCcw, ChevronDown, ChevronUp, Send, History, Trash2, Clock, ArrowRight,
+  RotateCcw, ChevronDown, ChevronUp, History, Trash2, Clock, ArrowRight,
   Ban, AlertCircle, Search, Loader2, Settings2, Target, Radar,
   CheckCircle2, XCircle,
 } from "lucide-react";
@@ -76,10 +76,19 @@ const URL_REGEX = /^https?:\/\//i;
 const DOMAIN_REGEX = /^[\w-]+\.\w{2,}(\/|$)/i;
 const QUEUE_TARGET = 9;
 
+// Words that indicate a descriptive search query rather than a company name
+const CRITERIA_REGEX = /\b(compan(y|ies)|founded|raised?|funding|revenue|arr|employees?|software|saas|platforms?|vertical|horizontal|b2b|b2c|enterprise|startups?|between|under|over|less than|more than|that|which|with|serving|providing|industry|market|stage|series [a-c]|seed|bootstrapped)\b/i;
+
+// Detect whether the input is a specific-company lookup (scout) or a
+// free-form criteria search (hunt). URLs/domains are always scout; text with
+// descriptive/criteria words is hunt; otherwise short proper-noun-style
+// entries are treated as company names.
 function isScoutInput(text: string) {
   const lines = text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
   if (!lines.length) return false;
-  return lines.some(l => URL_REGEX.test(l) || DOMAIN_REGEX.test(l));
+  if (lines.some(l => URL_REGEX.test(l) || DOMAIN_REGEX.test(l))) return true;
+  if (CRITERIA_REGEX.test(text)) return false;
+  return lines.every(l => l.split(/\s+/).length <= 4);
 }
 
 function formatDate(iso: string) {
@@ -544,7 +553,7 @@ export default function HuntPage() {
       <div className="mb-5">
         <h1 className="text-xl font-bold text-slate-900 mb-1">Hunt</h1>
         <p className="text-sm text-slate-500">
-          {activeView === "search" ? (mode === "scout" ? "Research specific companies by name or URL" : "Describe what you're looking for — AI finds matching companies") : "AI-recommended companies matched to your thesis"}
+          Describe what you're looking for, or look up a specific company — AI finds and scores matches against your thesis
         </p>
       </div>
 
@@ -553,38 +562,21 @@ export default function HuntPage() {
         <textarea
           className="w-full text-sm text-slate-800 placeholder:text-slate-400 resize-none outline-none leading-relaxed"
           rows={3}
-          placeholder={mode === "scout"
-            ? "Enter company names or URLs, one per line:\n\nAcme Corp\nhttps://widgetco.com"
-            : 'Describe what you\'re looking for… e.g. "Vertical SaaS for construction, Series A, founded 2020–2023"'
-          }
+          placeholder={'Either describe what you\'re looking for — e.g. "Vertical SaaS for construction, founded between 2020 and 2023, raised less than $5M to date" — and I\'ll search for relevant companies, OR enter a company name / URL to look up a specific company.'}
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) search(); }}
         />
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
-              <button onClick={() => setMode("hunt")} className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${mode === "hunt" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
-                <Radar size={11} /> Hunt
-              </button>
-              <button onClick={() => setMode("scout")} className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${mode === "scout" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
-                <Target size={11} /> Scout
-              </button>
-            </div>
-            <p className="text-[11px] text-slate-400 hidden sm:block">⌘+Enter to run</p>
-          </div>
+          <p className="text-[11px] text-slate-400 hidden sm:block">⌘+Enter to run</p>
           <div className="flex items-center gap-2">
             <Button onClick={() => setShowPrefs(v => !v)} variant="outline" size="sm" className="text-slate-500">
               <Settings2 size={13} className="mr-1" />Preferences
             </Button>
-            <Button onClick={() => { setActiveView("leads"); topUp(); }} disabled={generating} variant="outline" size="sm" className="text-violet-600 border-violet-200 hover:bg-violet-50">
-              <Sparkles size={13} className={`mr-1 ${generating ? "animate-pulse" : ""}`} />
-              {generating ? "Finding…" : "Auto Generate Leads"}
-            </Button>
-            <Button onClick={search} disabled={searching || !query.trim()} size="sm" className={mode === "scout" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"}>
+            <Button onClick={search} disabled={searching || !query.trim()} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
               {searching
-                ? mode === "scout" ? <><Loader2 size={13} className="mr-1.5 animate-spin" />Scouting…</> : <><Radar size={13} className="mr-1.5 animate-pulse" />Hunting…</>
-                : mode === "scout" ? <><Target size={13} className="mr-1.5" />Scout</> : <><Send size={13} className="mr-1.5" />Hunt</>
+                ? <><Loader2 size={13} className="mr-1.5 animate-spin" />Searching…</>
+                : <><Search size={13} className="mr-1.5" />Search</>
               }
             </Button>
           </div>
@@ -757,15 +749,21 @@ export default function HuntPage() {
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-100 mx-auto mb-4"><Sparkles className="text-violet-500" size={28} /></div>
               <h3 className="font-semibold text-slate-800 mb-1">No leads yet</h3>
               <p className="text-sm text-slate-400 mb-5 max-w-sm mx-auto">
-                Generate AI-recommended companies based on your thesis.{" "}
+                Generate AI-recommended companies based on your default thesis.{" "}
                 {!showPrefs && <button onClick={() => setShowPrefs(true)} className="text-blue-600 hover:underline">Set your preferences first.</button>}
               </p>
-              <Button onClick={topUp} className="bg-violet-600 hover:bg-violet-700"><Sparkles size={14} className="mr-2" />Generate {QUEUE_TARGET} leads</Button>
+              <Button onClick={topUp} className="bg-violet-600 hover:bg-violet-700"><Sparkles size={14} className="mr-2" />Generate {QUEUE_TARGET} Random Leads</Button>
             </div>
           )}
           {!leadsLoading && (leads.length > 0 || generating) && (
             <>
-              <p className="text-xs text-slate-400 max-w-xl mb-4">AI-recommended companies matched to your thesis. Pursue to add to pipeline, pass to skip. <span className="text-amber-600 font-medium">Metrics are estimates — verify before progressing.</span></p>
+              <div className="flex items-start justify-between mb-4">
+                <p className="text-xs text-slate-400 max-w-xl">AI-recommended companies matched to your default thesis. Pursue to add to pipeline, pass to skip. <span className="text-amber-600 font-medium">Metrics are estimates — verify before progressing.</span></p>
+                <Button variant="outline" size="sm" onClick={topUp} disabled={generating} className="shrink-0 ml-4 text-violet-600 border-violet-200 hover:bg-violet-50">
+                  <Sparkles size={13} className={`mr-1.5 ${generating ? "animate-pulse" : ""}`} />
+                  {generating ? "Finding…" : `Generate ${QUEUE_TARGET} Random Leads`}
+                </Button>
+              </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {leads.map(lead => <LeadCard key={lead.id} lead={lead} onPursue={() => processLead(lead, "pursue")} onSave={() => processLead(lead, "save")} onPass={() => processLead(lead, "pass")} onRefresh={() => refreshLead(lead)} processing={processingId === lead.id} refreshing={refreshingId === lead.id} />)}
                 {Array.from({ length: skeletonCount }).map((_, i) => <SkeletonCard key={`sk-${i}`} />)}
