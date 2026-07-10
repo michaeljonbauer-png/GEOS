@@ -334,6 +334,7 @@ export default function HuntPage() {
   const [history, setHistory] = useState<SessionMeta[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(true);
+  const [historyFilter, setHistoryFilter] = useState("");
 
   // Preferences
   const [showPrefs, setShowPrefs] = useState(false);
@@ -546,6 +547,9 @@ export default function HuntPage() {
   const skeletonCount = generating ? Math.max(0, QUEUE_TARGET - leads.length) : 0;
   const endMarketsList = parseList(prefs.endMarkets);
   const targetStagesList = parseList(prefs.targetStages);
+  const filteredHistory = historyFilter.trim()
+    ? history.filter(s => s.query.toLowerCase().includes(historyFilter.trim().toLowerCase()))
+    : history;
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -788,7 +792,22 @@ export default function HuntPage() {
               <p className="text-sm text-slate-400 italic px-1 mb-6">No searches yet — every Hunt and Scout run will be saved here.</p>
             ) : (
               <div className="flex flex-col gap-1.5 mb-6">
-                {history.map(session => (
+                {history.length > 5 && (
+                  <div className="relative mb-1">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                    <input
+                      type="text"
+                      className="w-full text-sm border border-slate-200 rounded-lg pl-8 pr-3 py-2 outline-none focus:border-blue-300 text-slate-700 placeholder:text-slate-400"
+                      placeholder="Filter past searches…"
+                      value={historyFilter}
+                      onChange={e => setHistoryFilter(e.target.value)}
+                    />
+                  </div>
+                )}
+                {filteredHistory.length === 0 && (
+                  <p className="text-sm text-slate-400 italic px-1 py-2">No past searches match "{historyFilter}".</p>
+                )}
+                {filteredHistory.map(session => (
                   <button key={session.id} onClick={() => loadSession(session)} className={`group flex items-center gap-3 text-left bg-white border border-slate-200 rounded-lg px-4 py-3 transition-colors ${session.type === "SCOUT" ? "hover:border-emerald-300 hover:bg-emerald-50" : "hover:border-blue-300 hover:bg-blue-50"}`}>
                     {session.type === "SCOUT" ? <Target size={11} className="text-slate-300 group-hover:text-emerald-400 shrink-0 transition-colors" /> : <Radar size={11} className="text-slate-300 group-hover:text-blue-400 shrink-0 transition-colors" />}
                     <div className="min-w-0 flex-1">
