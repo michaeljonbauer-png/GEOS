@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { formatARR, formatGrowth, getStatusConfig, scoreColor, getPriorityConfig, PIPELINE_STAGES } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { BookmarkMinus, ThumbsDown } from "lucide-react";
+import { formatARR, formatGrowth, scoreColor, getPriorityConfig, PIPELINE_STAGES } from "@/lib/utils";
+import { useToast } from "@/components/ui/use-toast";
 
 interface Company {
   id: string;
@@ -29,6 +30,7 @@ const STAGE_CONFIG: Record<string, { label: string; color: string; headerBg: str
 
 
 export default function PipelinePage() {
+  const { toast } = useToast();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -45,10 +47,32 @@ export default function PipelinePage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const removeFromPipeline = async (id: string, status: "WATCHLIST" | "PASSED") => {
+    const company = companies.find((c) => c.id === id);
+    setCompanies((prev) => prev.filter((c) => c.id !== id));
+    await fetch(`/api/companies/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    toast({
+      title: `${company?.name ?? "Company"} ${status === "WATCHLIST" ? "moved to Watchlist" : "marked as Passed"}`,
+      description: "Removed from pipeline — still in your Companies database.",
+    });
+  };
+
   const handleDrop = async (status: string) => {
     if (!dragging || dragging === status) return;
     const company = companies.find((c) => c.id === dragging);
     if (!company) return;
+
+    if (status === "WATCHLIST" || status === "PASSED") {
+      const id = dragging;
+      setDragging(null);
+      setDragOver(null);
+      await removeFromPipeline(id, status);
+      return;
+    }
 
     // Optimistic update
     setCompanies((prev) =>
@@ -129,21 +153,37 @@ export default function PipelinePage() {
                     draggable
                     onDragStart={() => setDragging(company.id)}
                     onDragEnd={() => { setDragging(null); setDragOver(null); }}
-                    className={`bg-white rounded-lg border border-slate-100 p-3 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-shadow ${
+                    className={`group bg-white rounded-lg border border-slate-100 p-3 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-shadow ${
                       dragging === company.id ? "opacity-40" : ""
                     }`}
                   >
-                    <Link href={`/companies/${company.id}`} onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <Link href={`/companies/${company.id}`} onClick={(e) => e.stopPropagation()} className="min-w-0">
                         <p className="text-sm font-semibold text-slate-900 leading-tight hover:text-blue-600">
                           {company.name}
                         </p>
+                      </Link>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); removeFromPipeline(company.id, "WATCHLIST"); }}
+                          className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-300 hover:text-amber-600 transition-all"
+                          title="Remove from pipeline → Watchlist (keeps company in database)"
+                        >
+                          <BookmarkMinus size={13} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); removeFromPipeline(company.id, "PASSED"); }}
+                          className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-300 hover:text-red-500 transition-all"
+                          title="Pass — remove from pipeline (keeps company in database)"
+                        >
+                          <ThumbsDown size={13} />
+                        </button>
                         <div
-                          className={`w-2 h-2 rounded-full shrink-0 mt-1 ${getPriorityConfig(company.priority).dot}`}
+                          className={`w-2 h-2 rounded-full shrink-0 ${getPriorityConfig(company.priority).dot}`}
                           title={`${getPriorityConfig(company.priority).label} priority`}
                         />
                       </div>
-                    </Link>
+                    </div>
 
                     {company.sector && (
                       <p className="text-xs text-slate-400 mb-2">{company.sector}</p>
@@ -190,6 +230,32 @@ export default function PipelinePage() {
           );
         })}
       </div>
+
+      {/* Drag-to-remove bar — appears while dragging a card */}
+      {dragging && (
+        <div className="flex gap-3 pt-3 border-t border-slate-200">
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver("WATCHLIST"); }}
+            onDragLeave={() => setDragOver(null)}
+            onDrop={() => handleDrop("WATCHLIST")}
+            className={`flex-1 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed py-4 text-sm font-medium transition-colors ${
+              dragOver === "WATCHLIST" ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-300 text-slate-400"
+            }`}
+          >
+            <BookmarkMinus size={15} /> Remove from pipeline → Watchlist
+          </div>
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver("PASSED"); }}
+            onDragLeave={() => setDragOver(null)}
+            onDrop={() => handleDrop("PASSED")}
+            className={`flex-1 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed py-4 text-sm font-medium transition-colors ${
+              dragOver === "PASSED" ? "border-red-400 bg-red-50 text-red-700" : "border-slate-300 text-slate-400"
+            }`}
+          >
+            <ThumbsDown size={15} /> Pass on this company
+          </div>
+        </div>
+      )}
     </div>
   );
 }

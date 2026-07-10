@@ -17,6 +17,8 @@ import {
   Sparkles,
   Calculator,
   Zap,
+  FileSpreadsheet,
+  Scale,
   Menu,
   X,
   type LucideIcon,
@@ -31,12 +33,14 @@ const sourcingSubItems = [
 ];
 
 const mainItems = [
-  { href: "/companies",    label: "Companies",              icon: Building2  },
-  { href: "/live-deal",    label: "Live Deal / Underwrite", icon: Briefcase  },
-  { href: "/portfolio",    label: "Portfolio / Investments",icon: BarChart3  },
-  { href: "/lp-reporting", label: "LP Comms / Reporting",   icon: Users      },
-  { href: "/fund-model",   label: "GP Fund Model",          icon: Calculator },
-  { href: "/dealfit",      label: "DealFit",                icon: Zap        },
+  { href: "/companies",    label: "Companies",              icon: Building2       },
+  { href: "/live-deal",    label: "Live Deal",              icon: Briefcase       },
+  { href: "/underwrite",   label: "Underwrite",             icon: FileSpreadsheet },
+  { href: "/comps",        label: "Transaction Comps",      icon: Scale           },
+  { href: "/portfolio",    label: "Portfolio / Investments",icon: BarChart3       },
+  { href: "/lp-reporting", label: "LP Comms / Reporting",   icon: Users           },
+  { href: "/fund-model",   label: "GP Fund Model",          icon: Calculator      },
+  { href: "/dealfit",      label: "DealFit",                icon: Zap             },
 ];
 
 export default function Sidebar() {
