@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { COMPANY_STATUSES, SECTORS, STAGES, PRIORITIES } from "@/lib/utils";
+import { COMPANY_STATUSES, SECTORS, STAGES, PRIORITIES, COMPANY_TYPES, isOperatingCompany } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function NewCompanyPage() {
@@ -26,6 +26,7 @@ export default function NewCompanyPage() {
 
   const [form, setForm] = useState({
     name: "",
+    companyType: "OPERATING_COMPANY",
     website: "",
     description: "",
     sector: "",
@@ -50,6 +51,8 @@ export default function NewCompanyPage() {
 
   const setSelect = (key: string) => (value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  const isOperating = isOperatingCompany(form.companyType);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,7 +99,7 @@ export default function NewCompanyPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
+              <div>
                 <Label htmlFor="name">Company Name *</Label>
                 <Input
                   id="name"
@@ -106,6 +109,19 @@ export default function NewCompanyPage() {
                   onChange={set("name")}
                   required
                 />
+              </div>
+              <div>
+                <Label>Company Type</Label>
+                <Select value={form.companyType} onValueChange={setSelect("companyType")}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMPANY_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="website">Website</Label>
@@ -167,7 +183,7 @@ export default function NewCompanyPage() {
         </Card>
 
         {/* Financials */}
-        <Card>
+        {isOperating && <Card>
           <CardHeader>
             <CardTitle className="text-base">Financials & Scale</CardTitle>
           </CardHeader>
@@ -255,15 +271,16 @@ export default function NewCompanyPage() {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </Card>}
 
         {/* Pipeline */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Pipeline & Sourcing</CardTitle>
+            <CardTitle className="text-base">{isOperating ? "Pipeline & Sourcing" : "Source & Links"}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
+              {isOperating && <>
               <div>
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={setSelect("status")}>
@@ -290,6 +307,7 @@ export default function NewCompanyPage() {
                   </SelectContent>
                 </Select>
               </div>
+              </>}
               <div>
                 <Label htmlFor="source">Source</Label>
                 <Input

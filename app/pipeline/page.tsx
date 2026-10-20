@@ -37,7 +37,7 @@ export default function PipelinePage() {
   const [dragOver, setDragOver] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    fetch("/api/companies?sortBy=updatedAt&sortDir=desc")
+    fetch("/api/companies?sortBy=updatedAt&sortDir=desc&companyType=OPERATING_COMPANY")
       .then((r) => r.json())
       .then((all: Company[]) => {
         setCompanies(all.filter((c) => PIPELINE_STAGES.includes(c.status as typeof PIPELINE_STAGES[number])));

@@ -19,7 +19,7 @@ interface Interaction {
   followUpDate: string | null;
   followUpDone: boolean;
   company: { id: string; name: string };
-  contact: { firstName: string; lastName: string; title: string | null } | null;
+  contact: { id: string; firstName: string; lastName: string; title: string | null } | null;
 }
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
@@ -192,10 +192,10 @@ export default function CRMPage() {
                                   {i.company.name}
                                 </Link>
                                 {i.contact && (
-                                  <span className="text-xs text-slate-400">
+                                  <Link href={`/contacts/${i.contact.id}`} className="text-xs text-slate-400 hover:text-blue-600">
                                     → {i.contact.firstName} {i.contact.lastName}
                                     {i.contact.title && `, ${i.contact.title}`}
-                                  </span>
+                                  </Link>
                                 )}
                               </div>
                               {i.subject && (

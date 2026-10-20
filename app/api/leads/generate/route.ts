@@ -85,10 +85,9 @@ export async function POST() {
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
-      db.sourcingPreferences.findUnique({ where: { id: "default" } }).catch(() => null),
       // Pursued companies with scoring notes — these are your real signal of what you like
       db.company.findMany({
-        where: { status: { in: ["IN_CONVERSATION", "DILIGENCE", "CLOSED_WON"] } },
+        where: { status: { in: ["IN_CONVERSATION", "MEETING_SCHEDULED", "DUE_DILIGENCE", "INVESTED", "MONITORING"] } },
         select: {
           name: true, sector: true, subSector: true, stage: true,
           arrEstimate: true, arrGrowth: true, employees: true,
@@ -97,6 +96,7 @@ export async function POST() {
         orderBy: { updatedAt: "desc" },
         take: 10,
       }),
+      db.sourcingPreferences.findUnique({ where: { id: "default" } }).catch(() => null),
     ]);
 
     const thesisSummary = thesisCriteria.map(t => {

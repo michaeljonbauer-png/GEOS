@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getStatusConfig, getPriorityConfig, formatARR, formatGrowth, scoreColor, COMPANY_STATUSES, SECTORS } from "@/lib/utils";
+import { getStatusConfig, getPriorityConfig, formatARR, formatGrowth, scoreColor, COMPANY_STATUSES, SECTORS, COMPANY_TYPES, getCompanyTypeConfig, isOperatingCompany } from "@/lib/utils";
 
 interface Company {
   id: string;
@@ -17,6 +17,7 @@ interface Company {
   sector: string | null;
   stage: string | null;
   status: string;
+  companyType: string;
   priority: string;
   arrEstimate: number | null;
   arrGrowth: number | null;
@@ -35,6 +36,7 @@ function CompaniesPage() {
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
   const [status, setStatus] = useState(searchParams.get("status") ?? "");
   const [sector, setSector] = useState(searchParams.get("sector") ?? "");
+  const [companyType, setCompanyType] = useState(searchParams.get("companyType") ?? "");
   const [sortBy, setSortBy] = useState(searchParams.get("sortBy") ?? "updatedAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">(
     (searchParams.get("sortDir") as "asc" | "desc") ?? "desc"
@@ -46,6 +48,7 @@ function CompaniesPage() {
     if (search) params.set("search", search);
     if (status) params.set("status", status);
     if (sector) params.set("sector", sector);
+    if (companyType) params.set("companyType", companyType);
     params.set("sortBy", sortBy);
     params.set("sortDir", sortDir);
 
@@ -53,7 +56,7 @@ function CompaniesPage() {
       .then((r) => r.json())
       .then(setCompanies)
       .finally(() => setLoading(false));
-  }, [search, status, sector, sortBy, sortDir]);
+  }, [search, status, sector, companyType, sortBy, sortDir]);
 
   useEffect(() => {
     const timer = setTimeout(fetchCompanies, 200);
@@ -105,7 +108,7 @@ function CompaniesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-6">
+      <div className="flex flex-wrap gap-3 mb-6">
         <div className="relative flex-1 max-w-xs">
           <Search
             size={16}
@@ -118,6 +121,20 @@ function CompaniesPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+
+        <Select value={companyType || "ALL"} onValueChange={(v) => setCompanyType(v === "ALL" ? "" : v)}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="All types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All types</SelectItem>
+            {COMPANY_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value}>
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <Select value={status || "ALL"} onValueChange={(v) => setStatus(v === "ALL" ? "" : v)}>
           <SelectTrigger className="w-44">
@@ -230,7 +247,14 @@ function CompaniesPage() {
                   >
                     <td className="px-4 py-3">
                       <div>
-                        <p className="font-medium text-slate-900">{co.name}</p>
+                        <p className="font-medium text-slate-900 flex items-center gap-2">
+                          {co.name}
+                          {!isOperatingCompany(co.companyType) && (
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${getCompanyTypeConfig(co.companyType).color}`}>
+                              {getCompanyTypeConfig(co.companyType).label}
+                            </span>
+                          )}
+                        </p>
                         {co.website && (
                           <a
                             href={co.website}
@@ -247,9 +271,13 @@ function CompaniesPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600">{co.sector ?? "—"}</td>
                     <td className="px-4 py-3">
-                      <Badge className={`${statusConfig.color} border-0 text-xs`}>
-                        {statusConfig.label}
-                      </Badge>
+                      {isOperatingCompany(co.companyType) ? (
+                        <Badge className={`${statusConfig.color} border-0 text-xs`}>
+                          {statusConfig.label}
+                        </Badge>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-slate-700">
                       {formatARR(co.arrEstimate)}

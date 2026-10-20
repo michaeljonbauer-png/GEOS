@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") ?? "";
     const status = searchParams.get("status");
     const sector = searchParams.get("sector");
+    const companyType = searchParams.get("companyType");
     const sortBy = searchParams.get("sortBy") ?? "updatedAt";
     const sortDir = (searchParams.get("sortDir") ?? "desc") as "asc" | "desc";
 
@@ -18,14 +19,15 @@ export async function GET(request: NextRequest) {
           search
             ? {
                 OR: [
-                  { name: { contains: search } },
-                  { description: { contains: search } },
-                  { sector: { contains: search } },
+                  { name: { contains: search, mode: "insensitive" } },
+                  { description: { contains: search, mode: "insensitive" } },
+                  { sector: { contains: search, mode: "insensitive" } },
                 ],
               }
             : {},
           status ? { status } : {},
           sector ? { sector } : {},
+          companyType ? { companyType } : {},
         ],
       },
       include: {
@@ -49,7 +51,7 @@ export async function POST(request: NextRequest) {
       name, website, description, sector, subSector, geography,
       arrEstimate, arrGrowth, nrrEstimate, grossMargin, employees,
       founded, stage, status, priority, source, linkedinUrl, crunchbaseUrl,
-      totalFundingM, recommendationScore, recommendationRationale,
+      totalFundingM, recommendationScore, recommendationRationale, companyType,
     } = body;
 
     if (!name) {
@@ -67,6 +69,7 @@ export async function POST(request: NextRequest) {
         employees: employees ? Number(employees) : null,
         founded: founded ? Number(founded) : null,
         stage, status: status ?? "IDENTIFIED",
+        companyType: companyType ?? "OPERATING_COMPANY",
         priority: priority ?? "UNKNOWN",
         source, linkedinUrl, crunchbaseUrl,
         recommendationScore: recommendationScore != null ? Number(recommendationScore) : null,

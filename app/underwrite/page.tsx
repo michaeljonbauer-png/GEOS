@@ -109,7 +109,7 @@ export default function UnderwriteListPage() {
     setModalOpen(true);
     if (companies.length === 0) {
       try {
-        const res = await fetch("/api/companies");
+        const res = await fetch("/api/companies?companyType=OPERATING_COMPANY");
         const data = await res.json();
         setCompanies(Array.isArray(data) ? data : []);
       } catch {

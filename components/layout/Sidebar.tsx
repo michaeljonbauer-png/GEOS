@@ -19,6 +19,7 @@ import {
   Zap,
   FileSpreadsheet,
   Scale,
+  Contact,
   Menu,
   X,
   type LucideIcon,
@@ -34,6 +35,7 @@ const sourcingSubItems = [
 
 const mainItems = [
   { href: "/companies",    label: "Companies",              icon: Building2       },
+  { href: "/contacts",     label: "Contacts",               icon: Contact         },
   { href: "/live-deal",    label: "Live Deal",              icon: Briefcase       },
   { href: "/underwrite",   label: "Underwrite",             icon: FileSpreadsheet },
   { href: "/comps",        label: "Transaction Comps",      icon: Scale           },

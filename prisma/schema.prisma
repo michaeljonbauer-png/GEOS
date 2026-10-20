@@ -22,8 +22,9 @@ model Company {
   employees     Int?
   founded       Int?
   stage         String?
+  companyType   String   @default("OPERATING_COMPANY") // see COMPANY_TYPES in lib/utils.ts
   status        String   @default("IDENTIFIED")
-  priority      String   @default("MEDIUM")
+  priority      String   @default("UNKNOWN")
   source        String?
   linkedinUrl   String?
   crunchbaseUrl String?
@@ -47,6 +48,7 @@ model Company {
   updatedAt     DateTime @updatedAt
 
   contacts     Contact[]
+  contactAffiliations ContactAffiliation[]
   interactions Interaction[]
   scoreDetails ScoreDetail[]
   notes        Note[]
@@ -117,6 +119,10 @@ model Contact {
   title       String?
   email       String?
   linkedinUrl String?
+  phone       String?
+  location    String?
+  relationship String  @default("UNKNOWN") // STRONG | WARM | COLD | UNKNOWN
+  notes       String?
   isPrimary   Boolean  @default(false)
   companyId   String
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -124,6 +130,21 @@ model Contact {
   updatedAt   DateTime @updatedAt
 
   interactions Interaction[]
+  affiliations ContactAffiliation[]
+}
+
+// Links a contact to companies other than their current employer:
+// board seats, former roles, investors in a company, bankers on a deal.
+model ContactAffiliation {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  role      String?
+  createdAt DateTime @default(now())
+
+  @@unique([contactId, companyId])
 }
 
 model Interaction {

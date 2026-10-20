@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import {
   ArrowLeft, ExternalLink, Linkedin, Mail, Phone, Calendar,
   Plus, Pencil, Trash2, Save, X, Send, StickyNote, Star,
-  Search, Sparkles, CheckCircle2, XCircle,
+  Search, Sparkles, CheckCircle2, XCircle, Link2, Unlink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   getStatusConfig, formatARR, formatGrowth, scoreColor, scoreBg,
   COMPANY_STATUSES, SECTORS, STAGES, INTERACTION_TYPES, PRIORITIES,
+  COMPANY_TYPES, getCompanyTypeConfig, isOperatingCompany, getRelationshipConfig,
 } from "@/lib/utils";
 import { computeUnderwriteScore, KPI_DEFINITIONS, type KPIScore } from "@/lib/underwrite-scoring";
 
@@ -61,7 +62,22 @@ interface Contact {
   title: string | null;
   email: string | null;
   linkedinUrl: string | null;
+  relationship: string;
   isPrimary: boolean;
+}
+
+interface ContactAffiliation {
+  id: string;
+  role: string | null;
+  contact: Contact & { company: { id: string; name: string } };
+}
+
+interface ContactSearchResult {
+  id: string;
+  firstName: string;
+  lastName: string;
+  title: string | null;
+  company: { id: string; name: string };
 }
 
 interface Interaction {
@@ -73,7 +89,7 @@ interface Interaction {
   date: string;
   followUpDate: string | null;
   followUpDone: boolean;
-  contact: { firstName: string; lastName: string } | null;
+  contact: { id: string; firstName: string; lastName: string } | null;
 }
 
 interface Note {
@@ -98,6 +114,7 @@ interface Company {
   founded: number | null;
   stage: string | null;
   status: string;
+  companyType: string;
   priority: string;
   source: string | null;
   linkedinUrl: string | null;
@@ -113,6 +130,7 @@ interface Company {
   recommendationRationale: string | null;
   recommendationScore: number | null;
   contacts: Contact[];
+  contactAffiliations: ContactAffiliation[];
   interactions: Interaction[];
   scoreDetails: ScoreDetail[];
   notes: Note[];
@@ -139,8 +157,13 @@ export default function CompanyDetailPage() {
   const [savingScore, setSavingScore] = useState(false);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showAddInteraction, setShowAddInteraction] = useState(false);
+  const [showLinkContact, setShowLinkContact] = useState(false);
+  const [linkSearch, setLinkSearch] = useState("");
+  const [linkResults, setLinkResults] = useState<ContactSearchResult[]>([]);
+  const [linkSelected, setLinkSelected] = useState<ContactSearchResult | null>(null);
+  const [linkRole, setLinkRole] = useState("");
   const [contactForm, setContactForm] = useState({ firstName: "", lastName: "", title: "", email: "", linkedinUrl: "", isPrimary: false });
-  const [interactionForm, setInteractionForm] = useState({ type: "EMAIL", direction: "OUTBOUND", subject: "", content: "", followUpDate: "" });
+  const [interactionForm, setInteractionForm] = useState({ type: "EMAIL", direction: "OUTBOUND", subject: "", content: "", followUpDate: "", contactId: "" });
   const [noteText, setNoteText] = useState("");
   const [sources, setSources] = useState<Record<string, { sourceLabel: string; sourceUrl: string | null; capturedAt?: string }>>({});
   const [refreshing, setRefreshing] = useState(false);
@@ -213,14 +236,53 @@ export default function CompanyDetailPage() {
     }
   };
 
+  useEffect(() => {
+    if (!showLinkContact) return;
+    const timer = setTimeout(() => {
+      const q = linkSearch.trim();
+      fetch(`/api/contacts${q ? `?search=${encodeURIComponent(q)}` : ""}`)
+        .then((r) => r.json())
+        .then((all: ContactSearchResult[]) => setLinkResults(all.filter((c) => c.company.id !== id).slice(0, 20)))
+        .catch(() => setLinkResults([]));
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [linkSearch, showLinkContact, id]);
+
+  const linkContact = async () => {
+    if (!linkSelected) return;
+    const res = await fetch(`/api/contacts/${linkSelected.id}/affiliations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ companyId: id, role: linkRole }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast({ title: "Could not link contact", description: data.error, variant: "destructive" });
+      return;
+    }
+    toast({ title: `${linkSelected.firstName} ${linkSelected.lastName} linked` });
+    setShowLinkContact(false);
+    setLinkSearch(""); setLinkSelected(null); setLinkRole("");
+    load();
+  };
+
+  const unlinkContact = async (contactId: string) => {
+    await fetch(`/api/contacts/${contactId}/affiliations?companyId=${id}`, { method: "DELETE" });
+    load();
+  };
+
   const addContact = async () => {
     try {
-      await fetch("/api/contacts", {
+      const res = await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...contactForm, companyId: id }),
       });
-      toast({ title: "Contact added" });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      toast(data.linkedExisting
+        ? { title: "Existing contact linked", description: `${data.firstName} ${data.lastName} was already in your contacts (same email) — linked to this company instead of duplicating.` }
+        : { title: "Contact added" });
       setShowAddContact(false);
       setContactForm({ firstName: "", lastName: "", title: "", email: "", linkedinUrl: "", isPrimary: false });
       load();
@@ -234,11 +296,11 @@ export default function CompanyDetailPage() {
       await fetch("/api/interactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...interactionForm, companyId: id }),
+        body: JSON.stringify({ ...interactionForm, contactId: interactionForm.contactId || null, companyId: id }),
       });
       toast({ title: "Activity logged" });
       setShowAddInteraction(false);
-      setInteractionForm({ type: "EMAIL", direction: "OUTBOUND", subject: "", content: "", followUpDate: "" });
+      setInteractionForm({ type: "EMAIL", direction: "OUTBOUND", subject: "", content: "", followUpDate: "", contactId: "" });
       load();
     } catch {
       toast({ title: "Error", description: "Failed to log activity.", variant: "destructive" });
@@ -345,7 +407,13 @@ export default function CompanyDetailPage() {
               <h1 className="text-2xl font-bold text-slate-900">{company.name}</h1>
             )}
             <div className="flex items-center gap-2 mt-2 flex-wrap">
-              <Badge className={`${statusConfig.color} border-0`}>{statusConfig.label}</Badge>
+              {isOperatingCompany(company.companyType) ? (
+                <Badge className={`${statusConfig.color} border-0`}>{statusConfig.label}</Badge>
+              ) : (
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${getCompanyTypeConfig(company.companyType).color}`}>
+                  {getCompanyTypeConfig(company.companyType).label}
+                </span>
+              )}
               {company.sector && (
                 <span className="text-sm text-slate-500">{company.sector}</span>
               )}
@@ -418,6 +486,7 @@ export default function CompanyDetailPage() {
       </div>
 
       {/* Quick metrics */}
+      {isOperatingCompany(company.companyType) && <>
       <div className="grid grid-cols-5 gap-4 mb-6">
         {[
           { label: "ARR", field: "arrEstimate", value: formatARR(company.arrEstimate) },
@@ -481,6 +550,8 @@ export default function CompanyDetailPage() {
         </div>
       </div>
 
+      </>}
+
       <Tabs defaultValue="overview">
         <TabsList className="mb-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -493,7 +564,7 @@ export default function CompanyDetailPage() {
             )}
           </TabsTrigger>
           <TabsTrigger value="contacts">
-            Contacts ({company.contacts.length})
+            Contacts ({company.contacts.length + company.contactAffiliations.length})
           </TabsTrigger>
           <TabsTrigger value="activity">
             Activity ({company.interactions.length})
@@ -511,6 +582,18 @@ export default function CompanyDetailPage() {
                 {editMode ? (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <Label>Company Type</Label>
+                        <Select
+                          value={(editForm.companyType as string) || "OPERATING_COMPANY"}
+                          onValueChange={(v) => setEditForm((f) => ({ ...f, companyType: v }))}
+                        >
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {COMPANY_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div>
                         <Label>Sector</Label>
                         <Select
@@ -983,48 +1066,96 @@ export default function CompanyDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Contacts</CardTitle>
-                <Button size="sm" onClick={() => setShowAddContact(true)}>
-                  <Plus size={14} /> Add Contact
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setShowLinkContact(true)}>
+                    <Link2 size={14} /> Link Existing
+                  </Button>
+                  <Button size="sm" onClick={() => setShowAddContact(true)}>
+                    <Plus size={14} /> Add Contact
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
-              {company.contacts.length === 0 ? (
+              {company.contacts.length === 0 && company.contactAffiliations.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-8">No contacts yet</p>
               ) : (
-                <div className="space-y-3">
-                  {company.contacts.map((c) => (
-                    <div key={c.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:bg-slate-50">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold text-sm">
-                          {c.firstName[0]}{c.lastName[0]}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-slate-900">
-                              {c.firstName} {c.lastName}
-                            </p>
-                            {c.isPrimary && (
-                              <Star size={12} className="text-yellow-500 fill-yellow-500" />
-                            )}
+                <div className="space-y-6">
+                  {company.contacts.length > 0 && (
+                    <div className="space-y-3">
+                      {company.contacts.map((c) => {
+                        const rel = getRelationshipConfig(c.relationship);
+                        return (
+                          <div key={c.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:bg-slate-50">
+                            <Link href={`/contacts/${c.id}`} className="flex items-center gap-3 min-w-0 group">
+                              <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold text-sm shrink-0">
+                                {c.firstName[0]}{c.lastName[0]}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-slate-900 group-hover:text-blue-600">
+                                    {c.firstName} {c.lastName}
+                                  </p>
+                                  {c.isPrimary && (
+                                    <Star size={12} className="text-yellow-500 fill-yellow-500" />
+                                  )}
+                                  <span className={`w-2 h-2 rounded-full ${rel.dot}`} title={`Relationship: ${rel.label}`} />
+                                </div>
+                                {c.title && <p className="text-xs text-slate-500">{c.title}</p>}
+                              </div>
+                            </Link>
+                            <div className="flex items-center gap-2">
+                              {c.email && (
+                                <a href={`mailto:${c.email}`} className="text-slate-400 hover:text-blue-600" title={c.email}>
+                                  <Mail size={16} />
+                                </a>
+                              )}
+                              {c.linkedinUrl && (
+                                <a href={c.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-600">
+                                  <Linkedin size={16} />
+                                </a>
+                              )}
+                            </div>
                           </div>
-                          {c.title && <p className="text-xs text-slate-500">{c.title}</p>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {c.email && (
-                          <a href={`mailto:${c.email}`} className="text-slate-400 hover:text-blue-600" title={c.email}>
-                            <Mail size={16} />
-                          </a>
-                        )}
-                        {c.linkedinUrl && (
-                          <a href={c.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-600">
-                            <Linkedin size={16} />
-                          </a>
-                        )}
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {company.contactAffiliations.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">
+                        Also connected — board members, investors, advisors, former staff
+                      </p>
+                      <div className="space-y-2">
+                        {company.contactAffiliations.map((a) => (
+                          <div key={a.id} className="group flex items-center justify-between p-3 rounded-lg border border-dashed border-slate-200 hover:bg-slate-50">
+                            <Link href={`/contacts/${a.contact.id}`} className="flex items-center gap-3 min-w-0">
+                              <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-semibold text-sm shrink-0">
+                                {a.contact.firstName[0]}{a.contact.lastName[0]}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-slate-900 hover:text-blue-600">
+                                  {a.contact.firstName} {a.contact.lastName}
+                                  {a.role && <span className="ml-2 text-xs font-normal text-slate-500">{a.role}</span>}
+                                </p>
+                                <p className="text-xs text-slate-400">
+                                  Currently {a.contact.title ? `${a.contact.title} at ` : "at "}{a.contact.company.name}
+                                </p>
+                              </div>
+                            </Link>
+                            <button
+                              onClick={() => unlinkContact(a.contact.id)}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
+                              title="Unlink from this company (contact is kept)"
+                            >
+                              <Unlink size={14} />
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </CardContent>
@@ -1063,6 +1194,11 @@ export default function CompanyDetailPage() {
                               <span className={`text-xs px-1.5 py-0.5 rounded ${interaction.direction === "INBOUND" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
                                 {interaction.direction}
                               </span>
+                              {interaction.contact && (
+                                <Link href={`/contacts/${interaction.contact.id}`} className="text-xs text-slate-500 hover:text-blue-600">
+                                  with {interaction.contact.firstName} {interaction.contact.lastName}
+                                </Link>
+                              )}
                             </div>
                             <span className="text-xs text-slate-400 shrink-0">
                               {format(new Date(interaction.date), "MMM d, yyyy")}
@@ -1171,6 +1307,46 @@ export default function CompanyDetailPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Link Existing Contact Dialog */}
+      <Dialog open={showLinkContact} onOpenChange={(o) => { setShowLinkContact(o); if (!o) { setLinkSelected(null); setLinkSearch(""); setLinkRole(""); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Link an existing contact to {company.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {linkSelected ? (
+              <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">{linkSelected.firstName} {linkSelected.lastName}</p>
+                  <p className="text-xs text-slate-500">{linkSelected.title ? `${linkSelected.title} · ` : ""}{linkSelected.company.name}</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setLinkSelected(null)}><X size={14} /></Button>
+              </div>
+            ) : (
+              <>
+                <Input autoFocus placeholder="Search by name, email, title or company…" value={linkSearch} onChange={(e) => setLinkSearch(e.target.value)} />
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {linkResults.length === 0 ? (
+                    <p className="text-sm text-slate-400 text-center py-4">No matching contacts</p>
+                  ) : linkResults.map((c) => (
+                    <button key={c.id} onClick={() => setLinkSelected(c)} className="w-full text-left rounded-md px-3 py-2 hover:bg-slate-50">
+                      <p className="text-sm font-medium text-slate-900">{c.firstName} {c.lastName}</p>
+                      <p className="text-xs text-slate-500">{c.title ? `${c.title} · ` : ""}{c.company.name}</p>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            <div>
+              <Label>Role at {company.name}</Label>
+              <Input className="mt-1" placeholder="Board Member, Investor, Banker on deal, Former CFO…" value={linkRole} onChange={(e) => setLinkRole(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLinkContact(false)}>Cancel</Button>
+            <Button onClick={linkContact} disabled={!linkSelected}>Link Contact</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Add Interaction Dialog */}
       <Dialog open={showAddInteraction} onOpenChange={setShowAddInteraction}>
         <DialogContent className="max-w-lg">
@@ -1199,6 +1375,23 @@ export default function CompanyDetailPage() {
                 </Select>
               </div>
             </div>
+            {(company.contacts.length > 0 || company.contactAffiliations.length > 0) && (
+              <div>
+                <Label>With</Label>
+                <Select value={interactionForm.contactId || "NONE"} onValueChange={(v) => setInteractionForm((f) => ({ ...f, contactId: v === "NONE" ? "" : v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">— No specific contact —</SelectItem>
+                    {company.contacts.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}{c.title ? ` · ${c.title}` : ""}</SelectItem>
+                    ))}
+                    {company.contactAffiliations.map((a) => (
+                      <SelectItem key={a.contact.id} value={a.contact.id}>{a.contact.firstName} {a.contact.lastName}{a.role ? ` · ${a.role}` : ""}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label>Subject / Title</Label>
               <Input className="mt-1" value={interactionForm.subject} onChange={(e) => setInteractionForm((f) => ({ ...f, subject: e.target.value }))} />

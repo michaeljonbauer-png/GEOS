@@ -68,6 +68,41 @@ export const PRIORITIES = [
   { value: "UNKNOWN",    label: "Unknown",    color: "bg-slate-50 text-slate-400 border-slate-200",    dot: "bg-slate-200"  },
 ];
 
+export const COMPANY_TYPES = [
+  { value: "OPERATING_COMPANY", label: "Operating Company", color: "bg-blue-50 text-blue-700 border-blue-200"         },
+  { value: "INVESTMENT_FIRM",   label: "Investment Firm",   color: "bg-violet-50 text-violet-700 border-violet-200"   },
+  { value: "INVESTMENT_BANK",   label: "Investment Bank",   color: "bg-indigo-50 text-indigo-700 border-indigo-200"   },
+  { value: "BANK",              label: "Bank",              color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  { value: "BANK_LENDER",       label: "Bank Lender",       color: "bg-teal-50 text-teal-700 border-teal-200"         },
+  { value: "NON_BANK_LENDER",   label: "Non-Bank Lender",   color: "bg-cyan-50 text-cyan-700 border-cyan-200"         },
+  { value: "LIMITED_PARTNER",   label: "Limited Partner",   color: "bg-amber-50 text-amber-700 border-amber-200"      },
+  { value: "LAW_FIRM",          label: "Law Firm",          color: "bg-slate-50 text-slate-600 border-slate-200"      },
+  { value: "ACCOUNTING_FIRM",   label: "Accounting Firm",   color: "bg-slate-50 text-slate-600 border-slate-200"      },
+  { value: "ADVISORY_FIRM",     label: "Advisory / Consulting", color: "bg-slate-50 text-slate-600 border-slate-200"  },
+  { value: "OTHER",             label: "Other",             color: "bg-slate-50 text-slate-500 border-slate-200"      },
+];
+
+export function getCompanyTypeConfig(type: string | null | undefined) {
+  return COMPANY_TYPES.find(t => t.value === type) ?? COMPANY_TYPES[0];
+}
+
+// Only operating companies are investment targets; everything else
+// (banks, firms, LPs) is a relationship, not a deal.
+export function isOperatingCompany(type: string | null | undefined) {
+  return !type || type === "OPERATING_COMPANY";
+}
+
+export const RELATIONSHIP_STRENGTHS = [
+  { value: "STRONG",  label: "Strong",  color: "bg-emerald-100 text-emerald-700 border-emerald-300", dot: "bg-emerald-500" },
+  { value: "WARM",    label: "Warm",    color: "bg-amber-100 text-amber-700 border-amber-300",       dot: "bg-amber-400"   },
+  { value: "COLD",    label: "Cold",    color: "bg-sky-100 text-sky-700 border-sky-300",             dot: "bg-sky-400"     },
+  { value: "UNKNOWN", label: "Unknown", color: "bg-slate-50 text-slate-400 border-slate-200",        dot: "bg-slate-200"   },
+];
+
+export function getRelationshipConfig(value: string | null | undefined) {
+  return RELATIONSHIP_STRENGTHS.find(r => r.value === value) ?? RELATIONSHIP_STRENGTHS[RELATIONSHIP_STRENGTHS.length - 1];
+}
+
 export function getPriorityConfig(priority: string) {
   return PRIORITIES.find(p => p.value === priority) ?? PRIORITIES[PRIORITIES.length - 1];
 }

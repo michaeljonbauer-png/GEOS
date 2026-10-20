@@ -4,6 +4,9 @@ import { subDays } from "date-fns";
 
 export const dynamic = "force-dynamic";
 
+// Deal metrics only count investment targets, not banks/firms/LPs.
+const operating = { companyType: "OPERATING_COMPANY" };
+
 export async function GET() {
   try {
     const [
@@ -15,8 +18,8 @@ export async function GET() {
       recentlyAdded,
       interactionsByType,
     ] = await Promise.all([
-      db.company.count(),
-      db.company.groupBy({ by: ["status"], _count: true }),
+      db.company.count({ where: operating }),
+      db.company.groupBy({ by: ["status"], _count: true, where: operating }),
       db.interaction.findMany({
         where: { date: { gte: subDays(new Date(), 30) } },
         include: {
@@ -36,12 +39,13 @@ export async function GET() {
         take: 5,
       }),
       db.company.findMany({
-        where: { totalScore: { not: null } },
+        where: { ...operating, totalScore: { not: null } },
         orderBy: { totalScore: "desc" },
         take: 5,
         select: { id: true, name: true, sector: true, totalScore: true, status: true, arrEstimate: true },
       }),
       db.company.findMany({
+        where: operating,
         orderBy: { createdAt: "desc" },
         take: 5,
         select: { id: true, name: true, sector: true, status: true, createdAt: true },

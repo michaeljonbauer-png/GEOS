@@ -10,6 +10,10 @@ export async function GET(
       where: { id: params.id },
       include: {
         contacts: { orderBy: [{ isPrimary: "desc" }, { lastName: "asc" }] },
+        contactAffiliations: {
+          include: { contact: { include: { company: { select: { id: true, name: true } } } } },
+          orderBy: { createdAt: "desc" },
+        },
         interactions: {
           orderBy: { date: "desc" },
           include: { contact: true },
@@ -45,13 +49,14 @@ export async function PATCH(
     const {
       name, website, description, sector, subSector, geography,
       arrEstimate, arrGrowth, nrrEstimate, grossMargin, employees,
-      founded, stage, status, priority, source, linkedinUrl, crunchbaseUrl,
+      founded, stage, status, priority, source, linkedinUrl, crunchbaseUrl, companyType,
     } = body;
 
     const company = await db.company.update({
       where: { id: params.id },
       data: {
         ...(name !== undefined && { name }),
+        ...(companyType !== undefined && { companyType }),
         ...(website !== undefined && { website }),
         ...(description !== undefined && { description }),
         ...(sector !== undefined && { sector }),
