@@ -4,10 +4,18 @@ const db = new PrismaClient();
 const MIGRATION_ID = "2026-10-pipeline-statuses";
 
 async function main() {
-  // Meeting Scheduled was merged into In Conversation; safe to repeat.
+  // Retired statuses folded into their replacements; safe to repeat.
   const meetings = await db.company.updateMany({
     where: { status: "MEETING_SCHEDULED" },
     data: { status: "IN_CONVERSATION" },
+  });
+  const watchlist = await db.company.updateMany({
+    where: { status: "WATCHLIST" },
+    data: { status: "IDENTIFIED" },
+  });
+  const monitoring = await db.company.updateMany({
+    where: { status: "MONITORING" },
+    data: { status: "INVESTED" },
   });
 
   // Identified is no longer a pipeline stage. Companies that were sitting in
@@ -28,6 +36,7 @@ async function main() {
 
   console.log(
     `[migrate-pipeline-statuses] meeting scheduled → in conversation: ${meetings.count}; ` +
+    `watchlist → identified: ${watchlist.count}; monitoring → invested: ${monitoring.count}; ` +
     (applied ? "identified → qualifying already applied" : `identified → qualifying: ${identified}`)
   );
 }

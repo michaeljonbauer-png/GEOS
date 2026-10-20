@@ -65,7 +65,6 @@ export async function GET() {
       DUE_DILIGENCE: 0,
       PASSED: 0,
       INVESTED: 0,
-      MONITORING: 0,
     } as Record<string, number>;
 
     statusCounts.forEach((s) => {
@@ -93,7 +92,7 @@ export async function GET() {
     // Return a safe empty shape so the UI renders instead of crashing
     return NextResponse.json({
       totalCompanies: 0, activeDeals: 0, invested: 0,
-      pipeline: { IDENTIFIED: 0, QUALIFYING: 0, REACHED_OUT: 0, IN_CONVERSATION: 0, DUE_DILIGENCE: 0, PASSED: 0, INVESTED: 0, MONITORING: 0 },
+      pipeline: { IDENTIFIED: 0, QUALIFYING: 0, REACHED_OUT: 0, IN_CONVERSATION: 0, DUE_DILIGENCE: 0, PASSED: 0, INVESTED: 0 },
       recentInteractions: [], upcomingFollowUps: [], topCompanies: [], recentlyAdded: [], interactionsByType: [],
     });
   }

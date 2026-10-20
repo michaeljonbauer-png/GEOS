@@ -138,7 +138,7 @@ export default function DashboardPage() {
       href: "/outreach",
     },
     {
-      label: "Invested",
+      label: "Invested (PortCo)",
       value: data.invested,
       icon: CheckCircle2,
       color: "text-emerald-600",

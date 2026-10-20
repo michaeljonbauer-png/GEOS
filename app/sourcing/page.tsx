@@ -147,7 +147,7 @@ function SkeletonCard() {
 function ResultCard({ result, onOpenDetail, onAdd, onSave, onDismiss, adding, dismissed, addedId, addedType }: {
   result: SearchResult; onOpenDetail: () => void; onAdd: () => void; onSave: () => void;
   onDismiss: () => void; adding: boolean; dismissed: boolean;
-  addedId: string | null; addedType: "pipeline" | "watchlist" | null;
+  addedId: string | null; addedType: "pipeline" | "saved" | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isScout = result._mode === "scout";
@@ -315,7 +315,7 @@ export default function HuntPage() {
   const [lastQuery, setLastQuery] = useState("");
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [addingId, setAddingId] = useState<string | null>(null);
-  const [addedCompanies, setAddedCompanies] = useState<Map<string, { id: string; type: "pipeline" | "watchlist" }>>(new Map());
+  const [addedCompanies, setAddedCompanies] = useState<Map<string, { id: string; type: "pipeline" | "saved" }>>(new Map());
   const [previewResult, setPreviewResult] = useState<SearchResult | null>(null);
   const [activeSessionDate, setActiveSessionDate] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -450,10 +450,10 @@ export default function HuntPage() {
   };
 
   // ── Add company ──
-  const addCompany = async (result: SearchResult, type: "pipeline" | "watchlist"): Promise<string | null> => {
+  const addCompany = async (result: SearchResult, type: "pipeline" | "saved"): Promise<string | null> => {
     setAddingId(result.name);
     try {
-      const status = type === "pipeline" ? "QUALIFYING" : "WATCHLIST";
+      const status = type === "pipeline" ? "QUALIFYING" : "IDENTIFIED";
       const score = result.fitScore ?? result.huntScore ?? null;
       const rationale = result.fitRationale ?? result.huntRationale ?? null;
       const res = await fetch("/api/companies", {
@@ -519,7 +519,7 @@ export default function HuntPage() {
       const res = await fetch(`/api/leads/${lead.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
       if (!res.ok) throw new Error();
       setLeads(prev => prev.filter(l => l.id !== lead.id));
-      const msg = action === "pursue" ? { title: `${lead.name} added to pipeline`, description: "Now on the pipeline as Qualifying." } : action === "save" ? { title: `${lead.name} saved to Companies`, description: "Stored as Watchlist — not an active pipeline opp." } : { title: `Passed on ${lead.name}`, description: "Feedback recorded — finding a replacement…" };
+      const msg = action === "pursue" ? { title: `${lead.name} added to pipeline`, description: "Now on the pipeline as Qualifying." } : action === "save" ? { title: `${lead.name} saved to Companies`, description: "Stored as Identified — not an active pipeline opp." } : { title: `Passed on ${lead.name}`, description: "Feedback recorded — finding a replacement…" };
       toast(msg); topUp();
     } catch { toast({ title: "Action failed", variant: "destructive" }); }
     finally { setProcessingId(null); }
@@ -711,7 +711,7 @@ export default function HuntPage() {
                     result={result}
                     onOpenDetail={() => setPreviewResult(result)}
                     onAdd={() => addCompany(result, "pipeline")}
-                    onSave={() => addCompany(result, "watchlist")}
+                    onSave={() => addCompany(result, "saved")}
                     onDismiss={() => { const s = new Set(dismissed); s.add(result.name); setDismissed(s); }}
                     adding={addingId === result.name}
                     dismissed={dismissed.has(result.name)}
@@ -832,7 +832,7 @@ export default function HuntPage() {
         addedType={previewAdded?.type ?? null}
         adding={addingId === previewResult?.name}
         onAdd={async () => { if (previewResult) await addCompany(previewResult, "pipeline"); }}
-        onSave={async () => { if (previewResult) await addCompany(previewResult, "watchlist"); }}
+        onSave={async () => { if (previewResult) await addCompany(previewResult, "saved"); }}
       />
     </div>
   );

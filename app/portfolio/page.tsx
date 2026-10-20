@@ -120,7 +120,7 @@ export default function PortfolioPage() {
     <div className="p-4 sm:p-8 max-w-xl mx-auto text-center mt-12">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 mx-auto mb-4"><BarChart3 className="text-emerald-600" size={28} /></div>
       <h1 className="text-xl font-bold text-slate-900 mb-2">Portfolio Monitoring</h1>
-      <p className="text-slate-500 text-sm mb-4">No portfolio companies yet. Set a company&apos;s status to <strong>Invested</strong> or <strong>Monitoring</strong> in the Companies tab to add them here.</p>
+      <p className="text-slate-500 text-sm mb-4">No portfolio companies yet. Set a company&apos;s status to <strong>Invested (PortCo)</strong> in the Companies tab to add them here.</p>
       <Link href="/companies"><Button>Go to Companies</Button></Link>
     </div>
   );

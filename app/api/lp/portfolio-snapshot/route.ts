@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 // Returns a fund-level snapshot for auto-populating LP updates
 export async function GET() {
   const companies = await db.company.findMany({
-    where: { status: { in: ["INVESTED", "MONITORING"] } },
+    where: { status: "INVESTED" },
     include: {
       investment: true,
       kpiSnapshots: { orderBy: { period: "desc" }, take: 1 },

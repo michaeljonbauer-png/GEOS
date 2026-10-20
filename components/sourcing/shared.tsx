@@ -222,7 +222,7 @@ export function CompanyPreviewModal({
   open: boolean;
   onClose: () => void;
   addedId: string | null;
-  addedType?: "pipeline" | "watchlist" | null;
+  addedType?: "pipeline" | "saved" | null;
   adding: boolean;
   onAdd: () => void;
   onSave?: () => void;
@@ -288,15 +288,15 @@ export function CompanyPreviewModal({
         <div className="flex gap-2 pt-4 border-t border-slate-100">
           {addedId ? (
             <>
-              {addedType !== "watchlist" && (
+              {addedType !== "saved" && (
                 <Link href={`/outreach?companyId=${addedId}`} className="flex-1" onClick={onClose}>
                   <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
                     <Send size={14} /> Draft outreach
                   </Button>
                 </Link>
               )}
-              <Link href={`/companies/${addedId}`} onClick={onClose} className={addedType === "watchlist" ? "flex-1" : ""}>
-                <Button variant="outline" size="sm" className={`gap-1.5 ${addedType === "watchlist" ? "w-full" : "shrink-0"}`}>
+              <Link href={`/companies/${addedId}`} onClick={onClose} className={addedType === "saved" ? "flex-1" : ""}>
+                <Button variant="outline" size="sm" className={`gap-1.5 ${addedType === "saved" ? "w-full" : "shrink-0"}`}>
                   Full profile <ArrowRight size={13} />
                 </Button>
               </Link>

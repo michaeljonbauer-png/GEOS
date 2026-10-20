@@ -33,10 +33,9 @@ const STAGE_DOT: Record<string, string> = {
 const MOVE_OPTIONS = {
   stages: PIPELINE_STAGES.map((s) => ({ value: s, label: getStatusConfig(s).label })),
   exits: [
-    { value: "INVESTED", label: "Invested" },
-    { value: "WATCHLIST", label: "Watchlist (remove)" },
-    { value: "PASSED", label: "Passed (remove)" },
+    { value: "INVESTED", label: "Invested (PortCo)" },
     { value: "IDENTIFIED", label: "Identified (remove)" },
+    { value: "PASSED", label: "Passed (remove)" },
   ],
 };
 
@@ -219,9 +218,9 @@ export default function PipelinePage() {
                       <td className="px-2 py-3">
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={() => moveTo(c, "WATCHLIST")}
+                            onClick={() => moveTo(c, "IDENTIFIED")}
                             className="p-1 text-slate-300 hover:text-amber-600 transition-colors"
-                            title="Remove from pipeline → Watchlist (keeps company in database)"
+                            title="Remove from pipeline → Identified (keeps company in database)"
                           >
                             <BookmarkMinus size={14} />
                           </button>

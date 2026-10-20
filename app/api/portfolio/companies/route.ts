@@ -3,12 +3,12 @@ import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-// Returns all companies with status INVESTED or MONITORING, with their
+// Returns all companies with status INVESTED, with their
 // investment record and latest KPI snapshot
 export async function GET() {
   try {
     const companies = await db.company.findMany({
-      where: { status: { in: ["INVESTED", "MONITORING"] } },
+      where: { status: "INVESTED" },
       include: {
         investment: true,
         kpiSnapshots: { orderBy: { period: "desc" }, take: 4 },
