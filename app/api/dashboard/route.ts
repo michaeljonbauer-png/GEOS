@@ -62,7 +62,6 @@ export async function GET() {
       QUALIFYING: 0,
       REACHED_OUT: 0,
       IN_CONVERSATION: 0,
-      MEETING_SCHEDULED: 0,
       DUE_DILIGENCE: 0,
       PASSED: 0,
       INVESTED: 0,
@@ -76,7 +75,6 @@ export async function GET() {
     const activeDeals = (pipeline.QUALIFYING ?? 0) +
       (pipeline.REACHED_OUT ?? 0) +
       (pipeline.IN_CONVERSATION ?? 0) +
-      (pipeline.MEETING_SCHEDULED ?? 0) +
       (pipeline.DUE_DILIGENCE ?? 0);
 
     return NextResponse.json({
@@ -95,7 +93,7 @@ export async function GET() {
     // Return a safe empty shape so the UI renders instead of crashing
     return NextResponse.json({
       totalCompanies: 0, activeDeals: 0, invested: 0,
-      pipeline: { IDENTIFIED: 0, QUALIFYING: 0, REACHED_OUT: 0, IN_CONVERSATION: 0, MEETING_SCHEDULED: 0, DUE_DILIGENCE: 0, PASSED: 0, INVESTED: 0, MONITORING: 0 },
+      pipeline: { IDENTIFIED: 0, QUALIFYING: 0, REACHED_OUT: 0, IN_CONVERSATION: 0, DUE_DILIGENCE: 0, PASSED: 0, INVESTED: 0, MONITORING: 0 },
       recentInteractions: [], upcomingFollowUps: [], topCompanies: [], recentlyAdded: [], interactionsByType: [],
     });
   }

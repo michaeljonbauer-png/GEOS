@@ -561,6 +561,12 @@ model UnderwriteComment {
 
 // ── Sourcing Preferences (singleton — id is always "default") ─────────────────
 
+// One row per one-time data migration that has been applied (see prisma/migrate-*.ts).
+model AppMigration {
+  id        String   @id
+  appliedAt DateTime @default(now())
+}
+
 model SourcingPreferences {
   id              String   @id @default("default")
   businessModel   String   @default("B2B")    // B2B | B2C | Both

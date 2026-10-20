@@ -453,7 +453,7 @@ export default function HuntPage() {
   const addCompany = async (result: SearchResult, type: "pipeline" | "watchlist"): Promise<string | null> => {
     setAddingId(result.name);
     try {
-      const status = type === "pipeline" ? "IDENTIFIED" : "WATCHLIST";
+      const status = type === "pipeline" ? "QUALIFYING" : "WATCHLIST";
       const score = result.fitScore ?? result.huntScore ?? null;
       const rationale = result.fitRationale ?? result.huntRationale ?? null;
       const res = await fetch("/api/companies", {
@@ -519,7 +519,7 @@ export default function HuntPage() {
       const res = await fetch(`/api/leads/${lead.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
       if (!res.ok) throw new Error();
       setLeads(prev => prev.filter(l => l.id !== lead.id));
-      const msg = action === "pursue" ? { title: `${lead.name} added to pipeline`, description: "Now visible in Companies as Identified." } : action === "save" ? { title: `${lead.name} saved to Companies`, description: "Stored as Watchlist — not an active pipeline opp." } : { title: `Passed on ${lead.name}`, description: "Feedback recorded — finding a replacement…" };
+      const msg = action === "pursue" ? { title: `${lead.name} added to pipeline`, description: "Now on the pipeline as Qualifying." } : action === "save" ? { title: `${lead.name} saved to Companies`, description: "Stored as Watchlist — not an active pipeline opp." } : { title: `Passed on ${lead.name}`, description: "Feedback recorded — finding a replacement…" };
       toast(msg); topUp();
     } catch { toast({ title: "Action failed", variant: "destructive" }); }
     finally { setProcessingId(null); }

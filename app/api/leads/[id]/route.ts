@@ -8,7 +8,7 @@ export async function PATCH(
 ) {
   const { action, notes } = await req.json() as { action: "pursue" | "save" | "pass"; notes?: string };
 
-  const newStatus = action === "pursue" ? "IDENTIFIED" : action === "save" ? "WATCHLIST" : "PASSED";
+  const newStatus = action === "pursue" ? "QUALIFYING" : action === "save" ? "WATCHLIST" : "PASSED";
 
   const company = await db.company.update({
     where: { id: params.id },

@@ -60,20 +60,16 @@ interface DashboardData {
 }
 
 const PIPELINE_LABELS: Record<string, string> = {
-  IDENTIFIED: "Identified",
   QUALIFYING: "Qualifying",
   REACHED_OUT: "Reached Out",
   IN_CONVERSATION: "Conversing",
-  MEETING_SCHEDULED: "Meeting Set",
   DUE_DILIGENCE: "Diligence",
 };
 
 const PIPELINE_COLORS: Record<string, string> = {
-  IDENTIFIED: "#94a3b8",
   QUALIFYING: "#60a5fa",
   REACHED_OUT: "#facc15",
   IN_CONVERSATION: "#fb923c",
-  MEETING_SCHEDULED: "#a78bfa",
   DUE_DILIGENCE: "#818cf8",
 };
 

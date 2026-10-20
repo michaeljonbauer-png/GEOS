@@ -161,7 +161,7 @@ export default function LiveDealPage() {
           {deals.length === 0 ? (
             <div className="px-4 py-6 text-center">
               <p className="text-xs text-slate-400 mb-2">No active deals yet.</p>
-              <p className="text-xs text-slate-400">Set a company status to <strong>Due Diligence</strong> or <strong>Meeting Scheduled</strong> in the Companies tab.</p>
+              <p className="text-xs text-slate-400">Move a company to <strong>Due Diligence</strong> on the Pipeline to start a live deal.</p>
               <Link href="/companies"><Button size="sm" variant="outline" className="mt-3 text-xs">Go to Companies</Button></Link>
             </div>
           ) : deals.map(deal => (

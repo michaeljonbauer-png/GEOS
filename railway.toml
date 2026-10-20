@@ -3,7 +3,7 @@ builder = "nixpacks"
 buildCommand = "npm run build"
 
 [deploy]
-startCommand = "npx prisma db push || true; (npx tsx prisma/clear-demo.ts || echo 'clear-demo skipped'); npm run start"
+startCommand = "npx prisma db push || true; (npx tsx prisma/clear-demo.ts || echo 'clear-demo skipped'); (npx tsx prisma/migrate-pipeline-statuses.ts || echo 'status migration skipped'); npm run start"
 healthcheckPath = "/"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
