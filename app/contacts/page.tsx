@@ -24,6 +24,7 @@ interface ContactRow {
   title: string | null;
   email: string | null;
   linkedinUrl: string | null;
+  location: string | null;
   relationship: string;
   company: CompanyRef;
   affiliations: { id: string; role: string | null; company: CompanyRef }[];
@@ -32,7 +33,7 @@ interface ContactRow {
 }
 
 const EMPTY_FORM = {
-  firstName: "", lastName: "", title: "", email: "", linkedinUrl: "", phone: "",
+  firstName: "", lastName: "", title: "", email: "", linkedinUrl: "", phone: "", location: "",
   relationship: "UNKNOWN", companyId: "", newCompanyName: "", newCompanyType: "OPERATING_COMPANY",
 };
 
@@ -129,7 +130,7 @@ export default function ContactsPage() {
       <div className="flex flex-wrap gap-3 mb-6">
         <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input className="pl-9" placeholder="Search name, email, title, company…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input className="pl-9" placeholder="Search name, email, title, company, location…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={typeFilter || "ALL"} onValueChange={(v) => setTypeFilter(v === "ALL" ? "" : v)}>
           <SelectTrigger className="w-48"><SelectValue placeholder="All company types" /></SelectTrigger>
@@ -148,11 +149,13 @@ export default function ContactsPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full min-w-[820px] text-sm">
+        <table className="w-full min-w-[1020px] text-sm">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50">
               <th className="text-left px-4 py-3 font-medium text-slate-600">Name</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Company type</th>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Location</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Also connected to</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Relationship</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Last touch</th>
@@ -161,10 +164,10 @@ export default function ContactsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="text-center py-12 text-slate-400">Loading...</td></tr>
+              <tr><td colSpan={8} className="text-center py-12 text-slate-400">Loading...</td></tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center py-16 text-slate-400">
+                <td colSpan={8} className="text-center py-16 text-slate-400">
                   <Users size={28} className="mx-auto mb-2 text-slate-300" />
                   {contacts.length === 0 ? "No contacts yet — add one, or add contacts from any company page." : "No contacts match these filters."}
                 </td>
@@ -180,7 +183,12 @@ export default function ContactsPage() {
                   </td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <Link href={`/companies/${c.company.id}`} className="text-slate-700 hover:text-blue-600 hover:underline">{c.company.name}</Link>
-                    <span className={`ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded border ${type.color}`}>{type.label}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${type.color}`}>{type.label}</span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {c.location || <span className="text-slate-300">—</span>}
                   </td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     {c.affiliations.length === 0 ? <span className="text-slate-300">—</span> : (
@@ -289,7 +297,11 @@ export default function ContactsPage() {
                 <Label>Phone</Label>
                 <Input className="mt-1" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
               </div>
-              <div className="col-span-2">
+              <div>
+                <Label>Location</Label>
+                <Input className="mt-1" placeholder="e.g. NYC, San Francisco" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} />
+              </div>
+              <div>
                 <Label>LinkedIn URL</Label>
                 <Input className="mt-1" value={form.linkedinUrl} onChange={(e) => setForm((f) => ({ ...f, linkedinUrl: e.target.value }))} />
               </div>
