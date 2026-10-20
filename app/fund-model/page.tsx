@@ -514,7 +514,7 @@ function GPPnL() {
       {/* Expense rate toggles — always visible */}
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
         <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-widest mb-3">Expense Rate Assumptions — adjust to see impact</p>
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <Slider label={`Benefits (${d.benefitsRate}%)`} value={d.benefitsRate} min={5} max={20} step={1}
             onChange={v => upd("benefitsRate", v)} display={fp(d.benefitsRate)}
             sub="Health, dental, 401k match" />

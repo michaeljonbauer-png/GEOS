@@ -381,16 +381,16 @@ export default function CompanyDetailPage() {
   );
 
   if (!company) return (
-    <div className="p-8 text-slate-500">Company not found.</div>
+    <div className="p-4 sm:p-8 text-slate-500">Company not found.</div>
   );
 
   const statusConfig = getStatusConfig(company.status);
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-8 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div className="flex items-start gap-4">
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-3 mb-6">
+        <div className="flex items-start gap-2 sm:gap-4 min-w-0">
           <Link href="/companies">
             <Button variant="ghost" size="icon" className="mt-1">
               <ArrowLeft size={18} />
@@ -446,7 +446,7 @@ export default function CompanyDetailPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {editMode ? (
             <>
               <Button variant="outline" size="sm" onClick={() => setEditMode(false)}>
@@ -487,7 +487,7 @@ export default function CompanyDetailPage() {
 
       {/* Quick metrics */}
       {isOperatingCompany(company.companyType) && <>
-      <div className="grid grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-4 mb-6">
         {[
           { label: "ARR", field: "arrEstimate", value: formatARR(company.arrEstimate) },
           { label: "Growth", field: "arrGrowth", value: formatGrowth(company.arrGrowth) },
@@ -495,7 +495,7 @@ export default function CompanyDetailPage() {
           { label: "GM", field: "grossMargin", value: company.grossMargin ? `${company.grossMargin}%` : "—" },
           { label: "Employees", field: "employees", value: company.employees?.toLocaleString() ?? "—" },
         ].map(({ label, field, value }) => (
-          <div key={label} className="bg-white rounded-lg border border-slate-200 px-4 py-3 text-center">
+          <div key={label} className="bg-white rounded-lg border border-slate-200 px-2 sm:px-4 py-3 text-center min-w-0">
             <p className="text-xs text-slate-400 uppercase tracking-wide">{label}</p>
             <p className="text-lg font-bold text-slate-800 mt-0.5">{value}</p>
             <div className="flex justify-center mt-1">
@@ -512,7 +512,7 @@ export default function CompanyDetailPage() {
 
       {/* Status + Priority changers */}
       <div className="flex flex-col gap-2 mb-6">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
           <span className="text-sm text-slate-500 font-medium w-16 shrink-0">Status:</span>
           <div className="flex gap-2 flex-wrap">
             {COMPANY_STATUSES.map((s) => (
@@ -530,7 +530,7 @@ export default function CompanyDetailPage() {
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
           <span className="text-sm text-slate-500 font-medium w-16 shrink-0">Priority:</span>
           <div className="flex gap-2 flex-wrap">
             {PRIORITIES.map((p) => (
@@ -575,7 +575,7 @@ export default function CompanyDetailPage() {
 
         {/* Overview Tab */}
         <TabsContent value="overview">
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <Card>
               <CardHeader><CardTitle className="text-base">Company Details</CardTitle></CardHeader>
               <CardContent className="space-y-3">

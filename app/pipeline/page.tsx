@@ -101,7 +101,7 @@ export default function PipelinePage() {
   }
 
   return (
-    <div className="p-6 h-full flex flex-col">
+    <div className="p-4 sm:p-6 h-full flex flex-col">
       <div className="mb-5">
         <h1 className="text-2xl font-bold text-slate-900">Pipeline</h1>
         <p className="text-slate-500 text-sm mt-0.5">

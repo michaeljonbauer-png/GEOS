@@ -552,7 +552,7 @@ export default function HuntPage() {
     : history;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-5">
         <h1 className="text-xl font-bold text-slate-900 mb-1">Hunt</h1>

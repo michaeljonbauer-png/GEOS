@@ -104,7 +104,7 @@ export default function CRMPage() {
   const grouped = groupByDate(filtered);
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-8 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Activity Log</h1>
         <p className="text-slate-500 text-sm mt-0.5">
@@ -112,9 +112,9 @@ export default function CRMPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main feed */}
-        <div className="col-span-2">
+        <div className="lg:col-span-2 min-w-0">
           {/* Filters */}
           <div className="flex gap-3 mb-5">
             <Select

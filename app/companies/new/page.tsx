@@ -78,7 +78,7 @@ export default function NewCompanyPage() {
   };
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <div className="p-4 sm:p-8 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/companies">
           <Button variant="ghost" size="icon">

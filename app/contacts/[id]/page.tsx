@@ -186,7 +186,7 @@ export default function ContactDetailPage() {
 
   if (loading) return <div className="flex items-center justify-center h-full text-slate-400 text-sm">Loading...</div>;
   if (!contact) return (
-    <div className="p-8 text-center text-slate-500">
+    <div className="p-4 sm:p-8 text-center text-slate-500">
       Contact not found. <Link href="/contacts" className="text-blue-600 hover:underline">Back to contacts</Link>
     </div>
   );
