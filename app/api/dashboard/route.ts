@@ -10,6 +10,7 @@ const operating = { companyType: "OPERATING_COMPANY" };
 export async function GET() {
   try {
     const [
+      totalContacts,
       totalCompanies,
       statusCounts,
       recentInteractions,
@@ -18,6 +19,7 @@ export async function GET() {
       recentlyAdded,
       interactionsByType,
     ] = await Promise.all([
+      db.contact.count(),
       db.company.count({ where: operating }),
       db.company.groupBy({ by: ["status"], _count: true, where: operating }),
       db.interaction.findMany({
@@ -77,6 +79,7 @@ export async function GET() {
       (pipeline.DUE_DILIGENCE ?? 0);
 
     return NextResponse.json({
+      totalContacts,
       totalCompanies,
       activeDeals,
       invested: pipeline.INVESTED ?? 0,
@@ -91,7 +94,7 @@ export async function GET() {
     console.error(error);
     // Return a safe empty shape so the UI renders instead of crashing
     return NextResponse.json({
-      totalCompanies: 0, activeDeals: 0, invested: 0,
+      totalContacts: 0, totalCompanies: 0, activeDeals: 0, invested: 0,
       pipeline: { IDENTIFIED: 0, QUALIFYING: 0, REACHED_OUT: 0, IN_CONVERSATION: 0, DUE_DILIGENCE: 0, PASSED: 0, INVESTED: 0 },
       recentInteractions: [], upcomingFollowUps: [], topCompanies: [], recentlyAdded: [], interactionsByType: [],
     });

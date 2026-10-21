@@ -79,14 +79,6 @@ export default function LiveDealPage() {
   const [newTermName, setNewTermName] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  const loadDeals = useCallback(async () => {
-    const res = await fetch("/api/deals/active");
-    if (res.ok) { const data = await res.json(); setDeals(data); if (data.length > 0 && !selectedDeal) setSelectedDeal(data[0]); }
-    setLoading(false);
-  }, [selectedDeal]);
-
-  useEffect(() => { loadDeals(); }, [loadDeals]);
-
   const selectDeal = useCallback(async (deal: Deal) => {
     setSelectedDeal(deal);
     const [t, tm] = await Promise.all([
@@ -96,7 +88,19 @@ export default function LiveDealPage() {
     setTasks(t); setTerms(tm);
   }, []);
 
-  useEffect(() => { if (selectedDeal) selectDeal(selectedDeal); }, []);
+  useEffect(() => {
+    (async () => {
+      const res = await fetch("/api/deals/active");
+      if (res.ok) {
+        const data: Deal[] = await res.json();
+        setDeals(data);
+        const requested = new URLSearchParams(window.location.search).get("deal");
+        const initial = data.find(d => d.id === requested) ?? data[0];
+        if (initial) selectDeal(initial);
+      }
+      setLoading(false);
+    })();
+  }, [selectDeal]);
 
   const seedTasks = async () => {
     if (!selectedDeal) return;
@@ -154,8 +158,9 @@ export default function LiveDealPage() {
       {/* Deal sidebar */}
       <aside className="w-64 border-r border-slate-200 bg-slate-50 flex flex-col shrink-0">
         <div className="px-4 py-4 border-b border-slate-200">
-          <h1 className="font-bold text-slate-900">Live Deals</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Active due diligence</p>
+          <Link href="/deals" className="text-[11px] text-blue-600 hover:underline">← Deal Execution</Link>
+          <h1 className="font-bold text-slate-900 mt-1">Diligence Workspace</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Checklists and deal terms for live deals</p>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
           {deals.length === 0 ? (

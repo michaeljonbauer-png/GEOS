@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
+import OutreachDialog from "@/components/outreach/OutreachDialog";
 import {
   RELATIONSHIP_STRENGTHS, INTERACTION_TYPES, getCompanyTypeConfig, getStatusConfig,
   isOperatingCompany,
@@ -78,6 +79,7 @@ export default function ContactDetailPage() {
   const [linkRole, setLinkRole] = useState("");
   const [linkQuery, setLinkQuery] = useState("");
   const [showLog, setShowLog] = useState(false);
+  const [showOutreach, setShowOutreach] = useState(false);
   const [logForm, setLogForm] = useState({ type: "CALL", direction: "OUTBOUND", subject: "", content: "", followUpDate: "", companyId: "" });
 
   const load = useCallback(() => {
@@ -236,9 +238,7 @@ export default function ContactDetailPage() {
             </>
           ) : (
             <>
-              <Link href={`/outreach?companyId=${contact.company.id}`}>
-                <Button variant="outline" size="sm"><Send size={14} /> Outreach</Button>
-              </Link>
+              <Button variant="outline" size="sm" onClick={() => setShowOutreach(true)}><Send size={14} /> Draft outreach</Button>
               <Button variant="outline" size="sm" onClick={() => setEditMode(true)}><Pencil size={14} /> Edit</Button>
               <Button variant="outline" size="sm" onClick={deleteContact} className="text-red-600 hover:bg-red-50"><Trash2 size={14} /></Button>
             </>
@@ -397,6 +397,14 @@ export default function ContactDetailPage() {
           </Card>
         </div>
       </div>
+
+      <OutreachDialog
+        companyId={contact.company.id}
+        defaultContactId={contact.id}
+        open={showOutreach}
+        onOpenChange={setShowOutreach}
+        onLogged={load}
+      />
 
       {/* Link company dialog */}
       <Dialog open={showLink} onOpenChange={(o) => { setShowLink(o); if (!o) { setLinkCompanyId(""); setLinkRole(""); setLinkQuery(""); } }}>

@@ -522,7 +522,7 @@ export default function DealFitPage() {
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
               <Zap size={18} className="text-white" />
             </div>
-            <h1 className="text-xl font-bold text-slate-900">DealFit</h1>
+            <h1 className="text-xl font-bold text-slate-900">Deal Share</h1>
             <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full uppercase tracking-wide">Beta</span>
           </div>
           <p className="text-sm text-slate-500">Anonymous cross-firm deal sharing. All companies shown under code names.</p>

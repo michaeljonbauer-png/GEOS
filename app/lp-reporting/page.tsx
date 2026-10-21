@@ -112,6 +112,7 @@ export default function LPCommunicationsPage() {
   const [selectedUpdate, setSelectedUpdate] = useState<LPUpdate | null>(null);
   const [editBody, setEditBody] = useState("");
   const [savingUpdate, setSavingUpdate] = useState(false);
+  const [tab, setTab] = useState("updates");
 
   const load = useCallback(async () => {
     const [c, u] = await Promise.all([
@@ -120,7 +121,19 @@ export default function LPCommunicationsPage() {
     ]);
     setContacts(c); setUpdates(u);
     setLoading(false);
+    return u as LPUpdate[];
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") === "contacts") setTab("contacts");
+    const requested = params.get("update");
+    if (!requested) return;
+    load().then(u => {
+      const match = u.find(x => x.id === requested);
+      if (match) { setSelectedUpdate(match); setEditBody(match.body); }
+    });
+  }, [load]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -173,13 +186,13 @@ export default function LPCommunicationsPage() {
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-900">LP Communications</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Manage LP contacts and draft quarterly updates</p>
+        <h1 className="text-xl font-bold text-slate-900">LP Update Memos</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Draft and send quarterly update memos; manage your LP contacts</p>
       </div>
 
-      <Tabs defaultValue="updates">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-6">
-          <TabsTrigger value="updates"><FileText size={13} className="mr-1.5" />Updates{updates.length > 0 && <span className="ml-1.5 text-xs">({updates.length})</span>}</TabsTrigger>
+          <TabsTrigger value="updates"><FileText size={13} className="mr-1.5" />Memos{updates.length > 0 && <span className="ml-1.5 text-xs">({updates.length})</span>}</TabsTrigger>
           <TabsTrigger value="contacts"><Users size={13} className="mr-1.5" />LP Contacts{contacts.length > 0 && <span className="ml-1.5 text-xs">({contacts.length})</span>}</TabsTrigger>
         </TabsList>
 

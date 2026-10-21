@@ -130,7 +130,7 @@ export default function PortfolioPage() {
       {/* Company sidebar */}
       <aside className="w-64 border-r border-slate-200 bg-slate-50 flex flex-col shrink-0">
         <div className="px-4 py-4 border-b border-slate-200">
-          <h1 className="font-bold text-slate-900">Portfolio</h1>
+          <h1 className="font-bold text-slate-900">Portfolio Monitoring</h1>
           <p className="text-xs text-slate-500 mt-0.5">{companies.length} compan{companies.length === 1 ? "y" : "ies"}</p>
         </div>
         {/* Summary strip */}

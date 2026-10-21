@@ -32,6 +32,7 @@ import {
 import { computeUnderwriteScore, KPI_DEFINITIONS, type KPIScore } from "@/lib/underwrite-scoring";
 
 import { useToast } from "@/components/ui/use-toast";
+import OutreachDialog from "@/components/outreach/OutreachDialog";
 
 interface ScoreDetail {
   id: string;
@@ -158,6 +159,7 @@ export default function CompanyDetailPage() {
   const [showAddContact, setShowAddContact] = useState(false);
   const [showAddInteraction, setShowAddInteraction] = useState(false);
   const [showLinkContact, setShowLinkContact] = useState(false);
+  const [showOutreach, setShowOutreach] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
   const [linkResults, setLinkResults] = useState<ContactSearchResult[]>([]);
   const [linkSelected, setLinkSelected] = useState<ContactSearchResult | null>(null);
@@ -194,6 +196,10 @@ export default function CompanyDetailPage() {
   };
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("outreach") === "1") setShowOutreach(true);
+  }, []);
 
   const saveEdit = async () => {
     try {
@@ -482,11 +488,9 @@ export default function CompanyDetailPage() {
                 <Search size={14} className={refreshing ? "animate-pulse" : ""} />
                 {refreshing ? "Refreshing…" : "Refresh research"}
               </Button>
-              <Link href={`/outreach?companyId=${company.id}`}>
-                <Button variant="outline" size="sm">
-                  <Send size={14} /> Outreach
-                </Button>
-              </Link>
+              <Button variant="outline" size="sm" onClick={() => setShowOutreach(true)}>
+                <Send size={14} /> Draft outreach
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
                 <Pencil size={14} /> Edit
               </Button>
@@ -1339,6 +1343,8 @@ export default function CompanyDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <OutreachDialog companyId={company.id} open={showOutreach} onOpenChange={setShowOutreach} onLogged={load} />
 
       {/* Link Existing Contact Dialog */}
       <Dialog open={showLinkContact} onOpenChange={(o) => { setShowLinkContact(o); if (!o) { setLinkSelected(null); setLinkSearch(""); setLinkRole(""); } }}>

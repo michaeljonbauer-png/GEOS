@@ -289,7 +289,7 @@ export function CompanyPreviewModal({
           {addedId ? (
             <>
               {addedType !== "saved" && (
-                <Link href={`/outreach?companyId=${addedId}`} className="flex-1" onClick={onClose}>
+                <Link href={`/companies/${addedId}?outreach=1`} className="flex-1" onClick={onClose}>
                   <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
                     <Send size={14} /> Draft outreach
                   </Button>
