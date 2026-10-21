@@ -6,7 +6,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import {
   ArrowLeft, Mail, Linkedin, Phone, MapPin, Pencil, Save, X, Trash2, Plus,
-  Building2, Unlink, Calendar, StickyNote, Send,
+  Building2, Unlink, Calendar, StickyNote, Send, Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ interface Contact {
   location: string | null;
   relationship: string;
   notes: string | null;
+  isPrimary: boolean;
   companyId: string;
   company: CompanyRef;
   affiliations: { id: string; role: string | null; company: CompanyRef }[];
@@ -132,6 +133,12 @@ export default function ContactDetailPage() {
     } catch {
       toast({ title: "Error", description: "Failed to save contact.", variant: "destructive" });
     }
+  };
+
+  const makePrimary = async () => {
+    if (!contact) return;
+    setContact({ ...contact, isPrimary: true });
+    await patch({ isPrimary: true }).catch(() => load());
   };
 
   const setRelationship = async (relationship: string) => {
@@ -307,6 +314,15 @@ export default function ContactDetailPage() {
                   {isOperatingCompany(contact.company.companyType) && ` · ${getStatusConfig(contact.company.status).label}`}
                 </p>
               </Link>
+              {contact.isPrimary ? (
+                <p className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 px-1">
+                  <Star size={11} className="fill-amber-500 text-amber-500" /> Primary contact for {contact.company.name}
+                </p>
+              ) : (
+                <button onClick={makePrimary} className="flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-amber-700 px-1">
+                  <Star size={11} /> Make primary contact for {contact.company.name}
+                </button>
+              )}
               {contact.affiliations.map((a) => (
                 <div key={a.id} className="group flex items-center justify-between gap-2 rounded-lg border border-slate-100 p-3 hover:bg-slate-50">
                   <Link href={`/companies/${a.company.id}`} className="min-w-0 flex-1">

@@ -266,6 +266,19 @@ export default function CompanyDetailPage() {
     load();
   };
 
+  const makePrimary = async (contactId: string) => {
+    const res = await fetch(`/api/contacts/${contactId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isPrimary: true }),
+    });
+    if (!res.ok) {
+      toast({ title: "Error", description: "Failed to update primary contact.", variant: "destructive" });
+      return;
+    }
+    load();
+  };
+
   const unlinkContact = async (contactId: string) => {
     await fetch(`/api/contacts/${contactId}/affiliations?companyId=${id}`, { method: "DELETE" });
     load();
@@ -1064,9 +1077,9 @@ export default function CompanyDetailPage() {
         <TabsContent value="contacts">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <CardTitle className="text-base">Contacts</CardTitle>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => setShowLinkContact(true)}>
                     <Link2 size={14} /> Link Existing
                   </Button>
@@ -1096,15 +1109,25 @@ export default function CompanyDetailPage() {
                                   <p className="font-medium text-slate-900 group-hover:text-blue-600">
                                     {c.firstName} {c.lastName}
                                   </p>
-                                  {c.isPrimary && (
-                                    <Star size={12} className="text-yellow-500 fill-yellow-500" />
-                                  )}
-                                  <span className={`w-2 h-2 rounded-full ${rel.dot}`} title={`Relationship: ${rel.label}`} />
+                                  <span className={`w-2 h-2 rounded-full shrink-0 ${rel.dot}`} title={`Relationship: ${rel.label}`} />
                                 </div>
                                 {c.title && <p className="text-xs text-slate-500">{c.title}</p>}
                               </div>
                             </Link>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
+                              {c.isPrimary ? (
+                                <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                                  <Star size={11} className="fill-amber-500 text-amber-500" /> Primary
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => makePrimary(c.id)}
+                                  className="flex items-center gap-1 text-[11px] font-medium text-slate-500 border border-slate-200 rounded-full px-2 py-0.5 hover:border-amber-300 hover:text-amber-700 hover:bg-amber-50 transition-colors"
+                                  title="Make this the company's primary contact"
+                                >
+                                  <Star size={11} /> Make primary
+                                </button>
+                              )}
                               {c.email && (
                                 <a href={`mailto:${c.email}`} className="text-slate-400 hover:text-blue-600" title={c.email}>
                                   <Mail size={16} />
@@ -1297,6 +1320,16 @@ export default function CompanyDetailPage() {
               <Label>LinkedIn URL</Label>
               <Input className="mt-1" value={contactForm.linkedinUrl} onChange={(e) => setContactForm((f) => ({ ...f, linkedinUrl: e.target.value }))} />
             </div>
+            {company.contacts.length > 0 && (
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={contactForm.isPrimary}
+                  onChange={(e) => setContactForm((f) => ({ ...f, isPrimary: e.target.checked }))}
+                />
+                Set as primary contact
+              </label>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddContact(false)}>Cancel</Button>

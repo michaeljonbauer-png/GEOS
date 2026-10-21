@@ -24,7 +24,7 @@ interface Company {
   totalScore: number | null;
   thesisFitScore: number | null;
   updatedAt: string;
-  contacts: { firstName: string; lastName: string }[];
+  contacts: { id: string; firstName: string; lastName: string; title: string | null; isPrimary: boolean }[];
   _count: { interactions: number; contacts: number };
 }
 
@@ -167,7 +167,7 @@ function CompaniesPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full min-w-[900px] text-sm">
+        <table className="w-full min-w-[1060px] text-sm">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50">
               <th
@@ -180,6 +180,7 @@ function CompaniesPage() {
               </th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Sector</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Primary Contact</th>
               <th
                 className="text-right px-4 py-3 font-medium text-slate-600 cursor-pointer hover:text-slate-900 select-none"
                 onClick={() => toggleSort("arrEstimate")}
@@ -223,13 +224,13 @@ function CompaniesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="text-center py-12 text-slate-400">
+                <td colSpan={10} className="text-center py-12 text-slate-400">
                   Loading...
                 </td>
               </tr>
             ) : companies.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center py-12 text-slate-400">
+                <td colSpan={10} className="text-center py-12 text-slate-400">
                   No companies found.{" "}
                   <Link href="/companies/new" className="text-blue-600 hover:underline">
                     Add your first company
@@ -239,6 +240,7 @@ function CompaniesPage() {
             ) : (
               companies.map((co) => {
                 const statusConfig = getStatusConfig(co.status);
+                const primary = co.contacts.find((c) => c.isPrimary);
                 return (
                   <tr
                     key={co.id}
@@ -275,6 +277,16 @@ function CompaniesPage() {
                         <Badge className={`${statusConfig.color} border-0 text-xs`}>
                           {statusConfig.label}
                         </Badge>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      {primary ? (
+                        <Link href={`/contacts/${primary.id}`} className="group block">
+                          <span className="text-slate-700 group-hover:text-blue-600 group-hover:underline">{primary.firstName} {primary.lastName}</span>
+                          {primary.title && <span className="block text-xs text-slate-400">{primary.title}</span>}
+                        </Link>
                       ) : (
                         <span className="text-slate-300">—</span>
                       )}

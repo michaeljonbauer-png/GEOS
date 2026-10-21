@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { ensurePrimaryContact } from "@/lib/contacts";
 
 export const dynamic = "force-dynamic";
 
@@ -95,12 +96,14 @@ export async function POST(request: NextRequest) {
       data: {
         firstName, lastName, title, email: normalizedEmail, linkedinUrl, phone, location, notes,
         relationship: relationship ?? "UNKNOWN",
-        isPrimary: isPrimary ?? false,
+        isPrimary: false,
         companyId,
       },
     });
+    await ensurePrimaryContact(db, companyId, isPrimary ? contact.id : undefined);
 
-    return NextResponse.json(contact, { status: 201 });
+    const saved = await db.contact.findUnique({ where: { id: contact.id } });
+    return NextResponse.json(saved, { status: 201 });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Failed to create contact" }, { status: 500 });

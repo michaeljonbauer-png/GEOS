@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { ensurePrimaryContact } from "../lib/contacts";
 
 const db = new PrismaClient();
 const MIGRATION_ID = "2026-10-pipeline-statuses";
@@ -34,8 +35,13 @@ async function main() {
     identified = moved.count;
   }
 
+  // Every company with contacts gets exactly one primary contact.
+  const withContacts = await db.company.findMany({ where: { contacts: { some: {} } }, select: { id: true } });
+  for (const { id } of withContacts) await ensurePrimaryContact(db, id);
+
   console.log(
-    `[migrate-pipeline-statuses] meeting scheduled → in conversation: ${meetings.count}; ` +
+    `[data-migrations] primary contacts checked for ${withContacts.length} companies; ` +
+    `meeting scheduled → in conversation: ${meetings.count}; ` +
     `watchlist → identified: ${watchlist.count}; monitoring → invested: ${monitoring.count}; ` +
     (applied ? "identified → qualifying already applied" : `identified → qualifying: ${identified}`)
   );

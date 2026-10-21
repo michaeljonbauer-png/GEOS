@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { ensurePrimaryContact } from "@/lib/contacts";
 
 export const dynamic = "force-dynamic";
 
@@ -73,12 +74,16 @@ export async function PATCH(
         ...(location !== undefined && { location }),
         ...(relationship !== undefined && { relationship }),
         ...(notes !== undefined && { notes }),
-        ...(isPrimary !== undefined && { isPrimary }),
+        ...(isPrimary === false && { isPrimary: false }),
         ...(companyId && { companyId, isPrimary: false }),
       },
     });
 
-    return NextResponse.json(contact);
+    if (contact.companyId !== current.companyId) await ensurePrimaryContact(db, current.companyId);
+    await ensurePrimaryContact(db, contact.companyId, isPrimary === true ? contact.id : undefined);
+
+    const saved = await db.contact.findUnique({ where: { id: contact.id } });
+    return NextResponse.json(saved);
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Failed to update contact" }, { status: 500 });
@@ -90,10 +95,11 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await db.$transaction([
+    const [, deleted] = await db.$transaction([
       db.interaction.updateMany({ where: { contactId: params.id }, data: { contactId: null } }),
       db.contact.delete({ where: { id: params.id } }),
     ]);
+    await ensurePrimaryContact(db, deleted.companyId);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);
