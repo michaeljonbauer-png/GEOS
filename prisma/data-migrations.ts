@@ -18,6 +18,11 @@ async function main() {
     where: { status: "MONITORING" },
     data: { status: "INVESTED" },
   });
+  // "Bank" company type was retired; Bank Lender is the closest remaining type.
+  const banks = await db.company.updateMany({
+    where: { companyType: "BANK" },
+    data: { companyType: "BANK_LENDER" },
+  });
 
   // Identified is no longer a pipeline stage. Companies that were sitting in
   // it on the pipeline move to Qualifying — once only, so companies marked
@@ -43,6 +48,7 @@ async function main() {
     `[data-migrations] primary contacts checked for ${withContacts.length} companies; ` +
     `meeting scheduled → in conversation: ${meetings.count}; ` +
     `watchlist → identified: ${watchlist.count}; monitoring → invested: ${monitoring.count}; ` +
+    `bank → bank lender: ${banks.count}; ` +
     (applied ? "identified → qualifying already applied" : `identified → qualifying: ${identified}`)
   );
 }
