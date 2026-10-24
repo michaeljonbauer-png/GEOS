@@ -25,6 +25,8 @@ interface Company {
 
 const STAGE_DOT: Record<string, string> = {
   QUALIFYING: "bg-blue-500",
+  MEMO_CREATED: "bg-purple-500",
+  OFFER_SUBMITTED: "bg-amber-500",
   DUE_DILIGENCE: "bg-indigo-500",
 };
 

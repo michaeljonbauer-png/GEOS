@@ -112,7 +112,7 @@ export default function DealExecutionDashboard() {
           <CardContent className="space-y-3">
             {deals.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-8">
-                No live deals. Move a company to <strong>Due Diligence</strong> on the{" "}
+                No live deals. Move a company to <strong>Offer Submitted</strong> or <strong>In Due Diligence</strong> on the{" "}
                 <Link href="/pipeline" className="text-blue-600 hover:underline">Pipeline</Link> to start one.
               </p>
             ) : deals.map((d) => {

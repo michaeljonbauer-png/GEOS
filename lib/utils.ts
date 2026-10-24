@@ -10,7 +10,9 @@ export const COMPANY_STATUSES = [
   { value: "REACHED_OUT",       label: "Reached Out",       color: "bg-yellow-100 text-yellow-700" },
   { value: "IN_CONVERSATION",   label: "In Conversation",   color: "bg-orange-100 text-orange-700" },
   { value: "QUALIFYING",        label: "Qualifying",        color: "bg-blue-100 text-blue-700" },
-  { value: "DUE_DILIGENCE",     label: "Due Diligence",     color: "bg-indigo-100 text-indigo-700" },
+  { value: "MEMO_CREATED",      label: "Memo Created",      color: "bg-purple-100 text-purple-700" },
+  { value: "OFFER_SUBMITTED",   label: "Offer Submitted",   color: "bg-amber-100 text-amber-700" },
+  { value: "DUE_DILIGENCE",     label: "In Due Diligence",  color: "bg-indigo-100 text-indigo-700" },
   { value: "PASSED",            label: "Passed",            color: "bg-red-100 text-red-700" },
   { value: "INVESTED",          label: "Invested (PortCo)", color: "bg-green-100 text-green-700" },
 ] as const;
@@ -26,6 +28,8 @@ export const RELATIONSHIP_STAGES = [
 // Actionable opportunities only — what appears on the Pipeline.
 export const PIPELINE_STAGES = [
   "QUALIFYING",
+  "MEMO_CREATED",
+  "OFFER_SUBMITTED",
   "DUE_DILIGENCE",
 ] as const;
 

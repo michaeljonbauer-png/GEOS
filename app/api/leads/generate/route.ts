@@ -87,7 +87,7 @@ export async function POST() {
       }),
       // Pursued companies with scoring notes — these are your real signal of what you like
       db.company.findMany({
-        where: { status: { in: ["IN_CONVERSATION", "QUALIFYING", "DUE_DILIGENCE", "INVESTED"] } },
+        where: { status: { in: ["IN_CONVERSATION", "QUALIFYING", "MEMO_CREATED", "OFFER_SUBMITTED", "DUE_DILIGENCE", "INVESTED"] } },
         select: {
           name: true, sector: true, subSector: true, stage: true,
           arrEstimate: true, arrGrowth: true, employees: true,

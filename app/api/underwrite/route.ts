@@ -40,6 +40,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Creating the memo advances a company that hasn't reached this stage yet.
+    await db.company.updateMany({
+      where: { id: companyId, status: { in: ["IDENTIFIED", "REACHED_OUT", "IN_CONVERSATION", "QUALIFYING"] } },
+      data: { status: "MEMO_CREATED" },
+    });
+
     return NextResponse.json(underwrite, { status: 201 });
   } catch (error) {
     console.error(error);

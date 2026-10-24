@@ -43,6 +43,8 @@ const FUNNEL_COLORS: Record<string, string> = {
   REACHED_OUT: "#94a3b8",
   IN_CONVERSATION: "#64748b",
   QUALIFYING: "#3b82f6",
+  MEMO_CREATED: "#a855f7",
+  OFFER_SUBMITTED: "#f59e0b",
   DUE_DILIGENCE: "#6366f1",
 };
 
