@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getStatusConfig, scoreColor, INTERACTION_TYPES, PIPELINE_STAGES } from "@/lib/utils";
+import { getStatusConfig, scoreColor, INTERACTION_TYPES, PIPELINE_STAGES, RELATIONSHIP_STAGES } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 interface DashboardData {
@@ -38,11 +38,12 @@ interface Interaction {
   contact: { id: string; firstName: string; lastName: string; title: string | null } | null;
 }
 
-const PIPELINE_COLORS: Record<string, string> = {
-  QUALIFYING: "#60a5fa",
-  REACHED_OUT: "#facc15",
-  IN_CONVERSATION: "#fb923c",
-  DUE_DILIGENCE: "#818cf8",
+const FUNNEL_COLORS: Record<string, string> = {
+  IDENTIFIED: "#cbd5e1",
+  REACHED_OUT: "#94a3b8",
+  IN_CONVERSATION: "#64748b",
+  QUALIFYING: "#3b82f6",
+  DUE_DILIGENCE: "#6366f1",
 };
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
@@ -123,7 +124,7 @@ export default function SourcingDashboard() {
   const grouped = groupByDate(feed);
 
   const touchpoints30d = data.interactionsByType.reduce((s, t) => s + t._count, 0);
-  const pipelineChartData = PIPELINE_STAGES.map((key) => ({
+  const pipelineChartData = [...RELATIONSHIP_STAGES, ...PIPELINE_STAGES].map((key) => ({
     name: getStatusConfig(key).label,
     value: data.pipeline[key] ?? 0,
     key,
@@ -195,7 +196,13 @@ export default function SourcingDashboard() {
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Pipeline by stage</CardTitle>
+              <div>
+                <CardTitle className="text-base">Coverage &amp; pipeline</CardTitle>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  <span className="inline-block w-2 h-2 rounded-sm bg-slate-400 mr-1" />Relationships
+                  <span className="inline-block w-2 h-2 rounded-sm bg-blue-500 ml-3 mr-1" />Pipeline (actionable)
+                </p>
+              </div>
               <Link href="/pipeline" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
                 Open pipeline <ArrowRight size={12} />
               </Link>
@@ -207,8 +214,15 @@ export default function SourcingDashboard() {
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip cursor={{ fill: "#f1f5f9" }} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]} onClick={() => router.push("/pipeline")} className="cursor-pointer">
-                  {pipelineChartData.map((entry) => <Cell key={entry.key} fill={PIPELINE_COLORS[entry.key] ?? "#60a5fa"} />)}
+                <Bar
+                  dataKey="value"
+                  radius={[4, 4, 0, 0]}
+                  className="cursor-pointer"
+                  onClick={(entry: { key?: string }) =>
+                    router.push(entry.key && PIPELINE_STAGES.includes(entry.key as typeof PIPELINE_STAGES[number]) ? "/pipeline" : `/companies?status=${entry.key ?? ""}`)
+                  }
+                >
+                  {pipelineChartData.map((entry) => <Cell key={entry.key} fill={FUNNEL_COLORS[entry.key] ?? "#60a5fa"} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

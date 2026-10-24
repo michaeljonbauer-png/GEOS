@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { PIPELINE_STAGES } from "@/lib/utils";
 import { subDays } from "date-fns";
 
 export const dynamic = "force-dynamic";
@@ -73,10 +74,7 @@ export async function GET() {
       pipeline[s.status] = s._count;
     });
 
-    const activeDeals = (pipeline.QUALIFYING ?? 0) +
-      (pipeline.REACHED_OUT ?? 0) +
-      (pipeline.IN_CONVERSATION ?? 0) +
-      (pipeline.DUE_DILIGENCE ?? 0);
+    const activeDeals = PIPELINE_STAGES.reduce((sum, stage) => sum + (pipeline[stage] ?? 0), 0);
 
     return NextResponse.json({
       totalContacts,

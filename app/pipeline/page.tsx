@@ -25,8 +25,6 @@ interface Company {
 
 const STAGE_DOT: Record<string, string> = {
   QUALIFYING: "bg-blue-500",
-  REACHED_OUT: "bg-yellow-400",
-  IN_CONVERSATION: "bg-orange-500",
   DUE_DILIGENCE: "bg-indigo-500",
 };
 
@@ -34,6 +32,8 @@ const MOVE_OPTIONS = {
   stages: PIPELINE_STAGES.map((s) => ({ value: s, label: getStatusConfig(s).label })),
   exits: [
     { value: "INVESTED", label: "Invested (PortCo)" },
+    { value: "IN_CONVERSATION", label: "In Conversation (remove)" },
+    { value: "REACHED_OUT", label: "Reached Out (remove)" },
     { value: "IDENTIFIED", label: "Identified (remove)" },
     { value: "PASSED", label: "Passed (remove)" },
   ],
