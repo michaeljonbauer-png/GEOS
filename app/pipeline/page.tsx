@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { BookmarkMinus, ThumbsDown } from "lucide-react";
+import { BookmarkMinus, ThumbsDown, ChevronDown } from "lucide-react";
 import {
   formatARR, formatGrowth, getPriorityConfig, getStatusConfig, PIPELINE_STAGES, PRIORITIES,
 } from "@/lib/utils";
@@ -39,6 +39,8 @@ const MOVE_OPTIONS = {
   ],
 };
 
+const COLLAPSE_KEY = "geos.pipeline.collapsed";
+
 const priorityRank = (p: string) => {
   const i = PRIORITIES.findIndex((x) => x.value === p);
   return i === -1 ? PRIORITIES.length : i;
@@ -49,6 +51,23 @@ export default function PipelinePage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [stageFilter, setStageFilter] = useState<string>("");
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(COLLAPSE_KEY);
+      if (saved) setCollapsed(JSON.parse(saved));
+    } catch { /* storage unavailable */ }
+  }, []);
+
+  const saveCollapsed = (next: Record<string, boolean>) => {
+    setCollapsed(next);
+    try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
+  };
+  const toggleStage = (stage: string) => saveCollapsed({ ...collapsed, [stage]: !collapsed[stage] });
+  const anyExpanded = PIPELINE_STAGES.some((s) => !collapsed[s]);
+  const setAll = (isCollapsed: boolean) =>
+    saveCollapsed(Object.fromEntries(PIPELINE_STAGES.map((s) => [s, isCollapsed])));
 
   const load = useCallback(() => {
     fetch("/api/companies?sortBy=updatedAt&sortDir=desc&companyType=OPERATING_COMPANY")
@@ -112,7 +131,7 @@ export default function PipelinePage() {
       </div>
 
       {/* Stage filter / summary */}
-      <div className="flex flex-wrap gap-2 mb-5">
+      <div className="flex flex-wrap items-center gap-2 mb-5">
         <button
           onClick={() => setStageFilter("")}
           className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${!stageFilter ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 text-slate-600 hover:border-slate-400"}`}
@@ -129,50 +148,61 @@ export default function PipelinePage() {
             {getStatusConfig(stage).label} · {inStage(stage).length}
           </button>
         ))}
+        {!stageFilter && (
+          <button onClick={() => setAll(anyExpanded)} className="ml-auto text-xs text-blue-600 hover:underline">
+            {anyExpanded ? "Collapse all" : "Expand all"}
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full min-w-[920px] text-sm">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50 text-left">
-              <th className="px-4 py-2.5 font-medium text-slate-600">Company</th>
-              <th className="px-4 py-2.5 font-medium text-slate-600">Priority</th>
-              <th className="px-4 py-2.5 font-medium text-slate-600 text-right">ARR</th>
-              <th className="px-4 py-2.5 font-medium text-slate-600 text-right">Growth</th>
-              <th className="px-4 py-2.5 font-medium text-slate-600">Primary contact</th>
-              <th className="px-4 py-2.5 font-medium text-slate-600 text-center">Activity</th>
-              <th className="px-4 py-2.5 font-medium text-slate-600">Last updated</th>
-              <th className="px-4 py-2.5 font-medium text-slate-600">Stage</th>
+            <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs">
+              <th className="pl-12 pr-4 py-2.5 font-medium text-slate-500">Company</th>
+              <th className="px-4 py-2.5 font-medium text-slate-500">Priority</th>
+              <th className="px-4 py-2.5 font-medium text-slate-500 text-right">ARR</th>
+              <th className="px-4 py-2.5 font-medium text-slate-500 text-right">Growth</th>
+              <th className="px-4 py-2.5 font-medium text-slate-500">Primary contact</th>
+              <th className="px-4 py-2.5 font-medium text-slate-500 text-center">Activity</th>
+              <th className="px-4 py-2.5 font-medium text-slate-500">Last updated</th>
+              <th className="px-4 py-2.5 font-medium text-slate-500">Stage</th>
               <th className="px-2 py-2.5" />
             </tr>
           </thead>
           {visibleStages.map((stage) => {
             const rows = inStage(stage);
+            const isOpen = stageFilter === stage || !collapsed[stage];
             return (
               <tbody key={stage}>
-                <tr className="bg-slate-50/60 border-y border-slate-100">
-                  <td colSpan={9} className="px-4 py-2">
-                    <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      <span className={`w-2 h-2 rounded-full ${STAGE_DOT[stage]}`} />
-                      {getStatusConfig(stage).label}
-                      <span className="font-normal text-slate-400">{rows.length}</span>
-                    </span>
+                <tr className="border-t border-slate-200 first:border-t-0">
+                  <td colSpan={9} className="p-0">
+                    <button
+                      onClick={() => toggleStage(stage)}
+                      aria-expanded={isOpen}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50 transition-colors"
+                    >
+                      <ChevronDown size={18} className={`text-slate-400 transition-transform ${isOpen ? "" : "-rotate-90"}`} />
+                      <span className={`w-2.5 h-2.5 rounded-full ${STAGE_DOT[stage]}`} />
+                      <span className="text-base font-semibold text-slate-900">{getStatusConfig(stage).label}</span>
+                      <span className="text-xs font-medium text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">{rows.length}</span>
+                    </button>
                   </td>
                 </tr>
-                {rows.length === 0 ? (
+                {!isOpen ? null : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-3 text-xs text-slate-300">No companies in this stage</td>
+                    <td colSpan={9} className="pl-12 pr-4 pb-3 text-xs text-slate-300">No companies in this stage</td>
                   </tr>
                 ) : rows.map((c) => {
                   const p = getPriorityConfig(c.priority);
                   const contact = c.contacts[0];
                   return (
-                    <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3">
-                        <Link href={`/companies/${c.id}`} className="font-medium text-slate-900 hover:text-blue-600">{c.name}</Link>
+                    <tr key={c.id} className="text-[13px] text-slate-600 hover:bg-slate-50 transition-colors">
+                      <td className="pl-12 pr-4 py-2.5">
+                        <Link href={`/companies/${c.id}`} className="text-slate-800 hover:text-blue-600">{c.name}</Link>
                         {(c.subSector || c.sector) && <p className="text-xs text-slate-400">{c.subSector || c.sector}</p>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2.5">
                         <button
                           onClick={() => cyclePriority(c)}
                           title="Click to cycle priority"
@@ -181,15 +211,15 @@ export default function PipelinePage() {
                           {p.label}
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-right font-mono text-slate-700">{c.arrEstimate !== null ? formatARR(c.arrEstimate) : <span className="text-slate-300">—</span>}</td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-2.5 text-right font-mono text-slate-700">{c.arrEstimate !== null ? formatARR(c.arrEstimate) : <span className="text-slate-300">—</span>}</td>
+                      <td className="px-4 py-2.5 text-right">
                         {c.arrGrowth !== null ? (
                           <span className={c.arrGrowth >= 100 ? "text-emerald-600 font-medium" : c.arrGrowth >= 50 ? "text-green-600" : "text-slate-600"}>
                             {formatGrowth(c.arrGrowth)}
                           </span>
                         ) : <span className="text-slate-300">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">
+                      <td className="px-4 py-2.5 text-slate-600">
                         {contact ? (
                           <>
                             {contact.firstName} {contact.lastName}
@@ -197,11 +227,11 @@ export default function PipelinePage() {
                           </>
                         ) : <span className="text-slate-300">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-center text-slate-500">{c._count.interactions}</td>
-                      <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                      <td className="px-4 py-2.5 text-center text-slate-500">{c._count.interactions}</td>
+                      <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">
                         {formatDistanceToNow(new Date(c.updatedAt))} ago
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2.5">
                         <select
                           value={c.status}
                           onChange={(e) => moveTo(c, e.target.value)}
@@ -215,7 +245,7 @@ export default function PipelinePage() {
                           </optgroup>
                         </select>
                       </td>
-                      <td className="px-2 py-3">
+                      <td className="px-2 py-2.5">
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => moveTo(c, "IDENTIFIED")}
