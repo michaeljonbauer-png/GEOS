@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import Anthropic from "@anthropic-ai/sdk";
+import { normalizeUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -81,8 +82,8 @@ Return ONLY a single JSON object (no markdown, no explanation):
   "fitRationale": "2-3 sentences: how well this fits the thesis and why — if acquired, explain that this is no longer an investable opportunity",
   "founderName": "Jane Smith",
   "founderTitle": "Co-Founder & CEO",
-  "founderLinkedIn": "https://linkedin.com/in/janesmith",
-  "founderEmail": "jane@company.com",
+  "founderLinkedIn": "the founder's linkedin.com/in/ URL exactly as it appeared in your search results, or null — never construct or guess one",
+  "founderEmail": "an email address you saw published, or null — never guess a format like first@company.com",
   "source": "Web search — verified ${today}"
 }
 
@@ -119,6 +120,12 @@ If the company cannot be found, return: { "notFound": true, "name": "${company.t
         { status: 404 }
       );
     }
+
+    // Drop anything in the founder link/email slots that isn't a real value
+    // (e.g. the model echoing the instruction text or a non-LinkedIn URL).
+    const li = typeof result.founderLinkedIn === "string" ? normalizeUrl(result.founderLinkedIn) : null;
+    result.founderLinkedIn = li && /^https:\/\/www\.linkedin\.com\/in\/[^/]+$/.test(li) ? li : null;
+    if (typeof result.founderEmail !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(result.founderEmail)) result.founderEmail = null;
 
     // Apply ARR floor server-side
     const totalFundingM = typeof result.totalFundingM === "number" ? result.totalFundingM : null;

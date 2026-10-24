@@ -21,6 +21,7 @@ import {
   RELATIONSHIP_STRENGTHS, INTERACTION_TYPES, getCompanyTypeConfig, getStatusConfig,
   isOperatingCompany,
 } from "@/lib/utils";
+import { normalizeUrl, linkedInSearchUrl } from "@/lib/urls";
 
 interface CompanyRef { id: string; name: string; companyType: string; status: string; sector: string | null }
 
@@ -226,7 +227,13 @@ export default function ContactDetailPage() {
               {contact.email && <a href={`mailto:${contact.email}`} className="flex items-center gap-1 hover:text-blue-600"><Mail size={13} />{contact.email}</a>}
               {contact.phone && <a href={`tel:${contact.phone}`} className="flex items-center gap-1 hover:text-blue-600"><Phone size={13} />{contact.phone}</a>}
               {contact.location && <span className="flex items-center gap-1"><MapPin size={13} />{contact.location}</span>}
-              {contact.linkedinUrl && <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-blue-600"><Linkedin size={13} />LinkedIn</a>}
+              {contact.linkedinUrl ? (
+                <a href={normalizeUrl(contact.linkedinUrl) ?? undefined} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-blue-600"><Linkedin size={13} />LinkedIn</a>
+              ) : (
+                <a href={linkedInSearchUrl(`${contact.firstName} ${contact.lastName}`, contact.company.name)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-slate-400 hover:text-blue-600" title="No LinkedIn saved — search LinkedIn for this person">
+                  <Linkedin size={13} />Find on LinkedIn
+                </a>
+              )}
             </div>
           </div>
         </div>

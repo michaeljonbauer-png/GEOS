@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { normalizeUrl } from "@/lib/urls";
 
 export async function GET(
   _request: NextRequest,
@@ -57,7 +58,7 @@ export async function PATCH(
       data: {
         ...(name !== undefined && { name }),
         ...(companyType !== undefined && { companyType }),
-        ...(website !== undefined && { website }),
+        ...(website !== undefined && { website: normalizeUrl(website) }),
         ...(description !== undefined && { description }),
         ...(sector !== undefined && { sector }),
         ...(subSector !== undefined && { subSector }),
@@ -72,8 +73,8 @@ export async function PATCH(
         ...(status !== undefined && { status }),
         ...(priority !== undefined && { priority }),
         ...(source !== undefined && { source }),
-        ...(linkedinUrl !== undefined && { linkedinUrl }),
-        ...(crunchbaseUrl !== undefined && { crunchbaseUrl }),
+        ...(linkedinUrl !== undefined && { linkedinUrl: normalizeUrl(linkedinUrl) }),
+        ...(crunchbaseUrl !== undefined && { crunchbaseUrl: normalizeUrl(crunchbaseUrl) }),
       },
     });
 

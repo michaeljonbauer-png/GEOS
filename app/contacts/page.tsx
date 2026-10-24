@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/use-toast";
 import {
   COMPANY_TYPES, RELATIONSHIP_STRENGTHS, getCompanyTypeConfig, getRelationshipConfig,
 } from "@/lib/utils";
+import { normalizeUrl } from "@/lib/urls";
 
 interface CompanyRef { id: string; name: string; companyType: string }
 
@@ -212,7 +213,7 @@ export default function ContactsPage() {
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-2 justify-end">
                       {c.email && <a href={`mailto:${c.email}`} className="text-slate-400 hover:text-blue-600" title={c.email}><Mail size={15} /></a>}
-                      {c.linkedinUrl && <a href={c.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-600"><Linkedin size={15} /></a>}
+                      {c.linkedinUrl && <a href={normalizeUrl(c.linkedinUrl) ?? undefined} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-600"><Linkedin size={15} /></a>}
                     </div>
                   </td>
                 </tr>

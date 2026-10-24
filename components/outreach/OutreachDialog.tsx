@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { normalizeUrl } from "@/lib/urls";
 
 interface OutreachContact {
   id: string;
@@ -259,7 +260,7 @@ export default function OutreachDialog({
                   <Button variant="outline" size="sm" onClick={openMail}><Mail size={14} /> Open in Mail</Button>
                 )}
                 {contact?.linkedinUrl && (
-                  <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer">
+                  <a href={normalizeUrl(contact.linkedinUrl) ?? undefined} target="_blank" rel="noopener noreferrer">
                     <Button variant="outline" size="sm" className="text-blue-600 border-blue-200 hover:bg-blue-50"><Linkedin size={14} /> Open LinkedIn</Button>
                   </a>
                 )}

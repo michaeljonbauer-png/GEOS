@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensurePrimaryContact } from "@/lib/contacts";
+import { normalizeUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,7 @@ export async function PATCH(
         ...(lastName !== undefined && { lastName }),
         ...(title !== undefined && { title }),
         ...(email !== undefined && { email: email?.trim() || null }),
-        ...(linkedinUrl !== undefined && { linkedinUrl }),
+        ...(linkedinUrl !== undefined && { linkedinUrl: normalizeUrl(linkedinUrl) }),
         ...(phone !== undefined && { phone }),
         ...(location !== undefined && { location }),
         ...(relationship !== undefined && { relationship }),

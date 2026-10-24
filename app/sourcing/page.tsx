@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { ScoreBadge, MetricRow, CompanyPreviewModal, type CompanyPreviewData } from "@/components/sourcing/shared";
+import { normalizeUrl } from "@/lib/urls";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -236,7 +237,7 @@ function ResultCard({ result, onOpenDetail, onAdd, onSave, onDismiss, adding, di
         <Button size="sm" className={`flex-1 text-white text-xs ${btnColor}`} onClick={onOpenDetail}><Search size={12} className="mr-1" />View details</Button>
         <Button size="sm" variant="outline" className="px-2.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50" onClick={onAdd} disabled={adding} title="Add to pipeline"><Building2 size={12} /></Button>
         <Button size="sm" variant="outline" className="px-2.5 text-slate-500 border-slate-200 hover:bg-slate-50" onClick={onSave} disabled={adding} title="Save to Companies"><BookmarkPlus size={12} /></Button>
-        {result.website && <a href={result.website} target="_blank" rel="noopener noreferrer"><Button size="sm" variant="outline" className="px-2.5"><ExternalLink size={12} /></Button></a>}
+        {result.website && <a href={normalizeUrl(result.website) ?? undefined} target="_blank" rel="noopener noreferrer"><Button size="sm" variant="outline" className="px-2.5"><ExternalLink size={12} /></Button></a>}
         <Button size="sm" variant="outline" className="px-2.5 text-slate-400 hover:bg-slate-50" onClick={onDismiss} title="Dismiss"><ThumbsDown size={12} /></Button>
       </div>
     </div>

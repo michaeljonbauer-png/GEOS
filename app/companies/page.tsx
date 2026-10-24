@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getStatusConfig, getPriorityConfig, formatARR, formatGrowth, scoreColor, COMPANY_STATUSES, SECTORS, COMPANY_TYPES, getCompanyTypeConfig, isOperatingCompany } from "@/lib/utils";
+import { normalizeUrl } from "@/lib/urls";
 
 interface Company {
   id: string;
@@ -259,7 +260,7 @@ function CompaniesPage() {
                         </p>
                         {co.website && (
                           <a
-                            href={co.website}
+                            href={normalizeUrl(co.website) ?? undefined}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs text-slate-400 hover:text-blue-600 flex items-center gap-0.5"

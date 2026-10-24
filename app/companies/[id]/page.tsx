@@ -33,6 +33,7 @@ import { computeUnderwriteScore, KPI_DEFINITIONS, type KPIScore } from "@/lib/un
 
 import { useToast } from "@/components/ui/use-toast";
 import OutreachDialog from "@/components/outreach/OutreachDialog";
+import { normalizeUrl, linkedInSearchUrl } from "@/lib/urls";
 
 interface ScoreDetail {
   id: string;
@@ -444,7 +445,7 @@ export default function CompanyDetailPage() {
               )}
               {company.website && (
                 <a
-                  href={company.website}
+                  href={normalizeUrl(company.website) ?? undefined}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-blue-600 hover:underline flex items-center gap-1"
@@ -454,7 +455,7 @@ export default function CompanyDetailPage() {
               )}
               {company.linkedinUrl && (
                 <a
-                  href={company.linkedinUrl}
+                  href={normalizeUrl(company.linkedinUrl) ?? undefined}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-blue-600 hover:underline flex items-center gap-1"
@@ -1137,9 +1138,19 @@ export default function CompanyDetailPage() {
                                   <Mail size={16} />
                                 </a>
                               )}
-                              {c.linkedinUrl && (
-                                <a href={c.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-600">
+                              {c.linkedinUrl ? (
+                                <a href={normalizeUrl(c.linkedinUrl) ?? undefined} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-600" title="LinkedIn profile">
                                   <Linkedin size={16} />
+                                </a>
+                              ) : (
+                                <a
+                                  href={linkedInSearchUrl(`${c.firstName} ${c.lastName}`, company.name)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-slate-300 hover:text-blue-600"
+                                  title="No LinkedIn saved — search LinkedIn for this person"
+                                >
+                                  <Search size={15} />
                                 </a>
                               )}
                             </div>

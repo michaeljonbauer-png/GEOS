@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { normalizeUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     const company = await db.company.create({
       data: {
-        name, website, description, sector, subSector, geography,
+        name, website: normalizeUrl(website), description, sector, subSector, geography,
         totalFundingM: totalFundingM ? Number(totalFundingM) : null,
         arrEstimate: arrEstimate ? Number(arrEstimate) : null,
         arrGrowth: arrGrowth ? Number(arrGrowth) : null,
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
         stage, status: status ?? "IDENTIFIED",
         companyType: companyType ?? "OPERATING_COMPANY",
         priority: priority ?? "UNKNOWN",
-        source, linkedinUrl, crunchbaseUrl,
+        source, linkedinUrl: normalizeUrl(linkedinUrl), crunchbaseUrl: normalizeUrl(crunchbaseUrl),
         recommendationScore: recommendationScore != null ? Number(recommendationScore) : null,
         recommendationRationale: recommendationRationale ?? null,
       },

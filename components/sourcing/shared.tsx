@@ -9,6 +9,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { ThesisFitResult } from "@/lib/thesis";
+import { normalizeUrl } from "@/lib/urls";
 
 export function ScoreBadge({ score, label = "fit" }: { score: number | null; label?: string }) {
   if (score == null) return null;
@@ -327,7 +328,7 @@ export function CompanyPreviewModal({
             </>
           )}
           {company.website && (
-            <a href={company.website} target="_blank" rel="noopener noreferrer">
+            <a href={normalizeUrl(company.website) ?? undefined} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" size="sm" className="px-3 shrink-0">
                 <ExternalLink size={14} />
               </Button>

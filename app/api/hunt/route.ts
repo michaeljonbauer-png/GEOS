@@ -132,8 +132,6 @@ Return ONLY a JSON array:
   "huntScore": 88,
   "founderName": "Jane Smith",
   "founderTitle": "Co-Founder & CEO",
-  "founderLinkedIn": "https://linkedin.com/in/janesmith",
-  "founderEmail": "jane@company.com",
   "source": "Training knowledge — verify via Refresh"
 }]`,
       }],
@@ -164,6 +162,8 @@ Return ONLY a JSON array:
     // Filter acquired (including uncertain) and apply ARR floors server-side
     results = results
       .filter(r => !r.acquired && !r.acquisitionUncertain)
+      // Hunt has no web access, so any founder LinkedIn/email would be a guess.
+      .map(r => ({ ...r, founderLinkedIn: null, founderEmail: null }))
       .map(r => {
         const floor = arrFloor(r.totalFundingM ?? null, r.employees ?? null);
         if (floor != null && (r.arrEstimate == null || r.arrEstimate < floor)) {

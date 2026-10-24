@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensurePrimaryContact } from "@/lib/contacts";
+import { normalizeUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
 
     const contact = await db.contact.create({
       data: {
-        firstName, lastName, title, email: normalizedEmail, linkedinUrl, phone, location, notes,
+        firstName, lastName, title, email: normalizedEmail, linkedinUrl: normalizeUrl(linkedinUrl), phone, location, notes,
         relationship: relationship ?? "UNKNOWN",
         isPrimary: false,
         companyId,
