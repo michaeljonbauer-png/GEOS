@@ -17,9 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import OutreachDialog from "@/components/outreach/OutreachDialog";
+import EditActivityDialog from "@/components/activity/EditActivityDialog";
 import {
   RELATIONSHIP_STRENGTHS, INTERACTION_TYPES, getCompanyTypeConfig, getStatusConfig,
-  isOperatingCompany,
+  isOperatingCompany, dateInputToISO, toDateInputValue,
 } from "@/lib/utils";
 import { normalizeUrl, linkedInSearchUrl } from "@/lib/urls";
 
@@ -81,7 +82,8 @@ export default function ContactDetailPage() {
   const [linkQuery, setLinkQuery] = useState("");
   const [showLog, setShowLog] = useState(false);
   const [showOutreach, setShowOutreach] = useState(false);
-  const [logForm, setLogForm] = useState({ type: "CALL", direction: "OUTBOUND", subject: "", content: "", followUpDate: "", companyId: "" });
+  const [editingActivity, setEditingActivity] = useState<Contact["interactions"][number] | null>(null);
+  const [logForm, setLogForm] = useState({ type: "CALL", direction: "OUTBOUND", subject: "", content: "", date: toDateInputValue(new Date()), followUpDate: "", companyId: "" });
 
   const load = useCallback(() => {
     fetch(`/api/contacts/${id}`)
@@ -175,7 +177,13 @@ export default function ContactDetailPage() {
     const res = await fetch("/api/interactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...logForm, companyId: logForm.companyId || contact.companyId, contactId: contact.id }),
+      body: JSON.stringify({
+        ...logForm,
+        date: dateInputToISO(logForm.date),
+        followUpDate: logForm.followUpDate ? dateInputToISO(logForm.followUpDate) : null,
+        companyId: logForm.companyId || contact.companyId,
+        contactId: contact.id,
+      }),
     });
     if (!res.ok) {
       toast({ title: "Error", description: "Failed to log activity.", variant: "destructive" });
@@ -183,7 +191,7 @@ export default function ContactDetailPage() {
     }
     toast({ title: "Activity logged" });
     setShowLog(false);
-    setLogForm({ type: "CALL", direction: "OUTBOUND", subject: "", content: "", followUpDate: "", companyId: "" });
+    setLogForm({ type: "CALL", direction: "OUTBOUND", subject: "", content: "", date: toDateInputValue(new Date()), followUpDate: "", companyId: "" });
     load();
   };
 
@@ -383,7 +391,12 @@ export default function ContactDetailPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-medium text-slate-900 truncate">{i.subject || INTERACTION_TYPES.find((t) => t.value === i.type)?.label}</p>
-                          <span className="text-xs text-slate-400 shrink-0">{format(new Date(i.date), "MMM d, yyyy")}</span>
+                          <span className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
+                            {format(new Date(i.date), "MMM d, yyyy")}
+                            <button onClick={() => setEditingActivity(i)} className="p-1 rounded text-slate-300 hover:text-blue-600 hover:bg-slate-100" title="Edit activity (date, notes, follow-up)">
+                              <Pencil size={12} />
+                            </button>
+                          </span>
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
                           {i.direction === "INBOUND" ? "Inbound" : "Outbound"} · re{" "}
@@ -405,6 +418,7 @@ export default function ContactDetailPage() {
         </div>
       </div>
 
+      <EditActivityDialog activity={editingActivity} onClose={() => setEditingActivity(null)} onSaved={load} />
       <OutreachDialog
         companyId={contact.company.id}
         defaultContactId={contact.id}
@@ -478,11 +492,16 @@ export default function ContactDetailPage() {
             )}
             <div><Label>Subject</Label><Input className="mt-1" value={logForm.subject} onChange={(e) => setLogForm((f) => ({ ...f, subject: e.target.value }))} /></div>
             <div><Label>Notes</Label><Textarea className="mt-1" rows={4} value={logForm.content} onChange={(e) => setLogForm((f) => ({ ...f, content: e.target.value }))} /></div>
+            <div>
+              <Label>Activity date</Label>
+              <Input className="mt-1" type="date" max={toDateInputValue(new Date())} value={logForm.date} onChange={(e) => setLogForm((f) => ({ ...f, date: e.target.value }))} />
+              <p className="text-[11px] text-slate-400 mt-1">When it actually happened — change this if you&apos;re logging it after the fact.</p>
+            </div>
             <div><Label>Follow-up date</Label><Input className="mt-1" type="date" value={logForm.followUpDate} onChange={(e) => setLogForm((f) => ({ ...f, followUpDate: e.target.value }))} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowLog(false)}>Cancel</Button>
-            <Button onClick={logActivity}>Log Activity</Button>
+            <Button onClick={logActivity} disabled={!logForm.date}>Log Activity</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

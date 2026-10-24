@@ -143,3 +143,17 @@ export function scoreBg(score: number): string {
   if (score >= 4) return "bg-yellow-50 border-yellow-200";
   return "bg-red-50 border-red-200";
 }
+
+// <input type="date"> values are "YYYY-MM-DD". new Date() on that string is
+// UTC midnight, which displays as the previous day west of UTC, so picked
+// days are anchored at local noon. Picking today keeps the current time.
+export function dateInputToISO(value: string): string {
+  if (value === toDateInputValue(new Date())) return new Date().toISOString();
+  return new Date(`${value}T12:00:00`).toISOString();
+}
+
+export function toDateInputValue(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}

@@ -7,17 +7,19 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    const { subject, content, date, followUpDate, followUpDone, contactId } = body;
+    const { type, direction, subject, content, date, followUpDate, followUpDone, contactId } = body;
 
     const interaction = await db.interaction.update({
       where: { id: params.id },
       data: {
+        ...(type !== undefined && { type }),
+        ...(direction !== undefined && { direction }),
         ...(subject !== undefined && { subject }),
         ...(content !== undefined && { content }),
         ...(date !== undefined && { date: new Date(date) }),
         ...(followUpDate !== undefined && { followUpDate: followUpDate ? new Date(followUpDate) : null }),
         ...(followUpDone !== undefined && { followUpDone }),
-        ...(contactId !== undefined && { contactId }),
+        ...(contactId !== undefined && { contactId: contactId || null }),
       },
     });
 

@@ -6,13 +6,14 @@ import { useRouter } from "next/navigation";
 import { format, isAfter, isBefore, addDays } from "date-fns";
 import {
   Building2, Users, TrendingUp, Activity, ArrowRight, Mail, Phone, Linkedin,
-  Calendar, StickyNote, Bell, Filter, Sparkles, Plus,
+  Calendar, StickyNote, Bell, Filter, Sparkles, Plus, Pencil,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getStatusConfig, scoreColor, INTERACTION_TYPES, PIPELINE_STAGES, RELATIONSHIP_STAGES } from "@/lib/utils";
+import EditActivityDialog from "@/components/activity/EditActivityDialog";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 interface DashboardData {
@@ -83,6 +84,7 @@ export default function SourcingDashboard() {
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [directionFilter, setDirectionFilter] = useState("ALL");
+  const [editingActivity, setEditingActivity] = useState<Interaction | null>(null);
 
   const loadInteractions = useCallback(() => {
     fetch("/api/interactions?limit=150")
@@ -322,7 +324,13 @@ export default function SourcingDashboard() {
                               <Badge className={`text-[10px] px-1.5 py-0 border ${i.direction === "INBOUND" ? "bg-green-50 text-green-700 border-green-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
                                 {typeLabel(i.type)} · {i.direction === "INBOUND" ? "In" : "Out"}
                               </Badge>
-                              <span className="text-[11px] text-slate-400 ml-auto">{format(new Date(i.date), "h:mm a")}</span>
+                              <button
+                                onClick={() => setEditingActivity(i)}
+                                className="ml-auto p-1 rounded text-slate-300 hover:text-blue-600 hover:bg-slate-100"
+                                title="Edit activity (date, notes, follow-up)"
+                              >
+                                <Pencil size={12} />
+                              </button>
                             </div>
                             {i.subject && <p className="text-sm text-slate-800 mt-0.5">{i.subject}</p>}
                             {i.content && <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{i.content}</p>}
@@ -409,6 +417,7 @@ export default function SourcingDashboard() {
           </Card>
         </div>
       </div>
+      <EditActivityDialog activity={editingActivity} onClose={() => setEditingActivity(null)} onSaved={loadInteractions} />
     </div>
   );
 }

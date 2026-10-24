@@ -28,11 +28,13 @@ import {
   getStatusConfig, formatARR, formatGrowth, scoreColor, scoreBg,
   COMPANY_STATUSES, SECTORS, STAGES, INTERACTION_TYPES, PRIORITIES,
   COMPANY_TYPES, getCompanyTypeConfig, isOperatingCompany, getRelationshipConfig,
+  dateInputToISO, toDateInputValue,
 } from "@/lib/utils";
 import { computeUnderwriteScore, KPI_DEFINITIONS, type KPIScore } from "@/lib/underwrite-scoring";
 
 import { useToast } from "@/components/ui/use-toast";
 import OutreachDialog from "@/components/outreach/OutreachDialog";
+import EditActivityDialog from "@/components/activity/EditActivityDialog";
 import { normalizeUrl, linkedInSearchUrl } from "@/lib/urls";
 
 interface ScoreDetail {
@@ -161,12 +163,13 @@ export default function CompanyDetailPage() {
   const [showAddInteraction, setShowAddInteraction] = useState(false);
   const [showLinkContact, setShowLinkContact] = useState(false);
   const [showOutreach, setShowOutreach] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<Interaction | null>(null);
   const [linkSearch, setLinkSearch] = useState("");
   const [linkResults, setLinkResults] = useState<ContactSearchResult[]>([]);
   const [linkSelected, setLinkSelected] = useState<ContactSearchResult | null>(null);
   const [linkRole, setLinkRole] = useState("");
   const [contactForm, setContactForm] = useState({ firstName: "", lastName: "", title: "", email: "", linkedinUrl: "", isPrimary: false });
-  const [interactionForm, setInteractionForm] = useState({ type: "EMAIL", direction: "OUTBOUND", subject: "", content: "", followUpDate: "", contactId: "" });
+  const [interactionForm, setInteractionForm] = useState({ type: "EMAIL", direction: "OUTBOUND", subject: "", content: "", date: toDateInputValue(new Date()), followUpDate: "", contactId: "" });
   const [noteText, setNoteText] = useState("");
   const [sources, setSources] = useState<Record<string, { sourceLabel: string; sourceUrl: string | null; capturedAt?: string }>>({});
   const [refreshing, setRefreshing] = useState(false);
@@ -316,11 +319,17 @@ export default function CompanyDetailPage() {
       await fetch("/api/interactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...interactionForm, contactId: interactionForm.contactId || null, companyId: id }),
+        body: JSON.stringify({
+          ...interactionForm,
+          date: dateInputToISO(interactionForm.date),
+          followUpDate: interactionForm.followUpDate ? dateInputToISO(interactionForm.followUpDate) : null,
+          contactId: interactionForm.contactId || null,
+          companyId: id,
+        }),
       });
       toast({ title: "Activity logged" });
       setShowAddInteraction(false);
-      setInteractionForm({ type: "EMAIL", direction: "OUTBOUND", subject: "", content: "", followUpDate: "", contactId: "" });
+      setInteractionForm({ type: "EMAIL", direction: "OUTBOUND", subject: "", content: "", date: toDateInputValue(new Date()), followUpDate: "", contactId: "" });
       load();
     } catch {
       toast({ title: "Error", description: "Failed to log activity.", variant: "destructive" });
@@ -1238,8 +1247,11 @@ export default function CompanyDetailPage() {
                                 </Link>
                               )}
                             </div>
-                            <span className="text-xs text-slate-400 shrink-0">
+                            <span className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
                               {format(new Date(interaction.date), "MMM d, yyyy")}
+                              <button onClick={() => setEditingActivity(interaction)} className="p-1 rounded text-slate-300 hover:text-blue-600 hover:bg-slate-100" title="Edit activity (date, notes, follow-up)">
+                                <Pencil size={12} />
+                              </button>
                             </span>
                           </div>
                           {interaction.subject && (
@@ -1355,6 +1367,7 @@ export default function CompanyDetailPage() {
         </DialogContent>
       </Dialog>
 
+      <EditActivityDialog activity={editingActivity} onClose={() => setEditingActivity(null)} onSaved={load} />
       <OutreachDialog companyId={company.id} open={showOutreach} onOpenChange={setShowOutreach} onLogged={load} />
 
       {/* Link Existing Contact Dialog */}
@@ -1443,6 +1456,17 @@ export default function CompanyDetailPage() {
               </div>
             )}
             <div>
+              <Label>Activity date</Label>
+              <Input
+                className="mt-1"
+                type="date"
+                max={toDateInputValue(new Date())}
+                value={interactionForm.date}
+                onChange={(e) => setInteractionForm((f) => ({ ...f, date: e.target.value }))}
+              />
+              <p className="text-[11px] text-slate-400 mt-1">When it actually happened — change this if you&apos;re logging it after the fact.</p>
+            </div>
+            <div>
               <Label>Subject / Title</Label>
               <Input className="mt-1" value={interactionForm.subject} onChange={(e) => setInteractionForm((f) => ({ ...f, subject: e.target.value }))} />
             </div>
@@ -1457,7 +1481,7 @@ export default function CompanyDetailPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddInteraction(false)}>Cancel</Button>
-            <Button onClick={addInteraction}>Log Activity</Button>
+            <Button onClick={addInteraction} disabled={!interactionForm.date}>Log Activity</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

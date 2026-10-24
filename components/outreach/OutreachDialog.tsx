@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { dateInputToISO, toDateInputValue } from "@/lib/utils";
 import { normalizeUrl } from "@/lib/urls";
 
 interface OutreachContact {
@@ -61,6 +62,7 @@ export default function OutreachDialog({
   const [hasDraft, setHasDraft] = useState(false);
   const [copied, setCopied] = useState<"subject" | "body" | null>(null);
   const [logged, setLogged] = useState(false);
+  const [sentOn, setSentOn] = useState(toDateInputValue(new Date()));
 
   useEffect(() => {
     try {
@@ -146,6 +148,7 @@ export default function OutreachDialog({
         content: body,
         companyId,
         contactId: contactId || undefined,
+        date: dateInputToISO(sentOn),
       }),
     });
     if (!res.ok) {
@@ -252,8 +255,12 @@ export default function OutreachDialog({
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={logAsSent} disabled={logged}>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                  Sent on
+                  <Input type="date" className="h-8 w-36 text-xs" max={toDateInputValue(new Date())} value={sentOn} onChange={(e) => setSentOn(e.target.value)} disabled={logged} />
+                </label>
+                <Button variant="outline" size="sm" onClick={logAsSent} disabled={logged || !sentOn}>
                   {logged ? <><Check size={14} /> Logged</> : <><Send size={14} /> Log as sent</>}
                 </Button>
                 {channel === "EMAIL" && (
