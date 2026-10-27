@@ -35,6 +35,7 @@ import { computeUnderwriteScore, KPI_DEFINITIONS, type KPIScore } from "@/lib/un
 import { useToast } from "@/components/ui/use-toast";
 import OutreachDialog from "@/components/outreach/OutreachDialog";
 import EditActivityDialog from "@/components/activity/EditActivityDialog";
+import { TypeBubble } from "@/components/contacts/ContactTypePicker";
 import { normalizeUrl, linkedInSearchUrl } from "@/lib/urls";
 
 interface ScoreDetail {
@@ -68,6 +69,7 @@ interface Contact {
   linkedinUrl: string | null;
   relationship: string;
   isPrimary: boolean;
+  contactTypes?: string[];
 }
 
 interface ContactAffiliation {
@@ -1126,6 +1128,11 @@ export default function CompanyDetailPage() {
                                   <span className={`w-2 h-2 rounded-full shrink-0 ${rel.dot}`} title={`Relationship: ${rel.label}`} />
                                 </div>
                                 {c.title && <p className="text-xs text-slate-500">{c.title}</p>}
+                                {c.contactTypes && c.contactTypes.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {c.contactTypes.map((t) => <TypeBubble key={t} label={t} small />)}
+                                  </div>
+                                )}
                               </div>
                             </Link>
                             <div className="flex items-center gap-2 shrink-0">

@@ -157,3 +157,56 @@ export function toDateInputValue(date: Date | string): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+// Contact types are free-form tags; these are always offered as options.
+export const DEFAULT_CONTACT_TYPES = [
+  "Operator",
+  "Founder",
+  "Advisor",
+  "Board Member",
+  "LP",
+  "Prospective LP",
+  "Co-Investor",
+  "Banker",
+  "Lender",
+  "Former Colleague",
+];
+
+const TAG_COLORS = [
+  "bg-blue-100 text-blue-800 border-blue-200",
+  "bg-emerald-100 text-emerald-800 border-emerald-200",
+  "bg-amber-100 text-amber-800 border-amber-200",
+  "bg-violet-100 text-violet-800 border-violet-200",
+  "bg-rose-100 text-rose-800 border-rose-200",
+  "bg-cyan-100 text-cyan-800 border-cyan-200",
+  "bg-lime-100 text-lime-800 border-lime-200",
+  "bg-orange-100 text-orange-800 border-orange-200",
+  "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200",
+  "bg-teal-100 text-teal-800 border-teal-200",
+  "bg-indigo-100 text-indigo-800 border-indigo-200",
+  "bg-pink-100 text-pink-800 border-pink-200",
+];
+
+// Same tag always gets the same color, including tags users create.
+export function tagColor(tag: string): string {
+  const preset = DEFAULT_CONTACT_TYPES.findIndex((t) => t.toLowerCase() === tag.toLowerCase());
+  if (preset !== -1) return TAG_COLORS[preset % TAG_COLORS.length];
+  let hash = 0;
+  for (const ch of tag.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return TAG_COLORS[hash % TAG_COLORS.length];
+}
+
+// Trims, drops blanks, and de-duplicates case-insensitively (first spelling wins).
+export function cleanTags(tags: unknown): string[] {
+  if (!Array.isArray(tags)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const t of tags) {
+    if (typeof t !== "string") continue;
+    const v = t.trim().replace(/\s+/g, " ").slice(0, 40);
+    if (!v || seen.has(v.toLowerCase())) continue;
+    seen.add(v.toLowerCase());
+    out.push(v);
+  }
+  return out;
+}

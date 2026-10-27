@@ -122,6 +122,7 @@ model Contact {
   phone       String?
   location    String?
   relationship String  @default("UNKNOWN") // STRONG | WARM | COLD | UNKNOWN
+  contactTypes String[] @default([]) // why this person matters: Operator, Advisor, LP, … (free-form tags)
   notes       String?
   isPrimary   Boolean  @default(false)
   companyId   String

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensurePrimaryContact } from "@/lib/contacts";
 import { normalizeUrl } from "@/lib/urls";
+import { cleanTags } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export async function PATCH(
     const body = await request.json();
     const {
       firstName, lastName, title, email, linkedinUrl, phone, location,
-      relationship, notes, isPrimary, companyId,
+      relationship, notes, isPrimary, companyId, contactTypes,
     } = body;
 
     const current = await db.contact.findUnique({ where: { id: params.id } });
@@ -75,6 +76,7 @@ export async function PATCH(
         ...(location !== undefined && { location }),
         ...(relationship !== undefined && { relationship }),
         ...(notes !== undefined && { notes }),
+        ...(contactTypes !== undefined && { contactTypes: cleanTags(contactTypes) }),
         ...(isPrimary === false && { isPrimary: false }),
         ...(companyId && { companyId, isPrimary: false }),
       },

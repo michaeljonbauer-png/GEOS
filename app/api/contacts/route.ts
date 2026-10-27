@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensurePrimaryContact } from "@/lib/contacts";
 import { normalizeUrl } from "@/lib/urls";
+import { cleanTags } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
       firstName, lastName, title, email, linkedinUrl, phone, location,
       relationship, notes, isPrimary, newCompany, role,
     } = body;
+    const contactTypes = cleanTags(body.contactTypes);
     let { companyId } = body;
 
     if (!firstName || !lastName || (!companyId && !newCompany?.name)) {
@@ -89,6 +91,11 @@ export async function POST(request: NextRequest) {
             update: {},
           });
         }
+        if (contactTypes.length) {
+          const merged = cleanTags([...existing.contactTypes, ...contactTypes]);
+          await db.contact.update({ where: { id: existing.id }, data: { contactTypes: merged } });
+          existing.contactTypes = merged;
+        }
         return NextResponse.json({ ...existing, linkedExisting: true }, { status: 200 });
       }
     }
@@ -97,6 +104,7 @@ export async function POST(request: NextRequest) {
       data: {
         firstName, lastName, title, email: normalizedEmail, linkedinUrl: normalizeUrl(linkedinUrl), phone, location, notes,
         relationship: relationship ?? "UNKNOWN",
+        contactTypes,
         isPrimary: false,
         companyId,
       },

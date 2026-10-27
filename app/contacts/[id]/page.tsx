@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import OutreachDialog from "@/components/outreach/OutreachDialog";
+import ContactTypePicker from "@/components/contacts/ContactTypePicker";
 import EditActivityDialog from "@/components/activity/EditActivityDialog";
 import {
   RELATIONSHIP_STRENGTHS, INTERACTION_TYPES, getCompanyTypeConfig, getStatusConfig,
@@ -38,6 +39,7 @@ interface Contact {
   relationship: string;
   notes: string | null;
   isPrimary: boolean;
+  contactTypes: string[];
   companyId: string;
   company: CompanyRef;
   affiliations: { id: string; role: string | null; company: CompanyRef }[];
@@ -146,6 +148,17 @@ export default function ContactDetailPage() {
     await patch({ isPrimary: true }).catch(() => load());
   };
 
+  const [typeOptions, setTypeOptions] = useState<string[]>([]);
+  useEffect(() => {
+    fetch("/api/contacts/types").then((r) => r.json()).then((o: { label: string }[]) => setTypeOptions(o.map((x) => x.label))).catch(() => {});
+  }, []);
+
+  const setContactTypes = async (contactTypes: string[]) => {
+    if (!contact) return;
+    setContact({ ...contact, contactTypes });
+    await patch({ contactTypes }).catch(() => load());
+  };
+
   const setRelationship = async (relationship: string) => {
     if (!contact) return;
     setContact({ ...contact, relationship });
@@ -217,7 +230,7 @@ export default function ContactDetailPage() {
   return (
     <div className="p-4 sm:p-8 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4 mb-6">
         <div className="flex items-start gap-3 min-w-0">
           <Link href="/contacts">
             <Button variant="ghost" size="icon"><ArrowLeft size={18} /></Button>
@@ -245,7 +258,7 @@ export default function ContactDetailPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
           {editMode ? (
             <>
               <Button variant="outline" size="sm" onClick={() => { setEditMode(false); setEditForm(contact); }}><X size={14} /> Cancel</Button>
@@ -259,6 +272,12 @@ export default function ContactDetailPage() {
             </>
           )}
         </div>
+      </div>
+
+      {/* Contact types */}
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        <span className="text-sm text-slate-500 font-medium">Contact types:</span>
+        <ContactTypePicker value={contact.contactTypes} options={typeOptions} onChange={setContactTypes} placeholder="Add type (Operator, Advisor, LP…)" />
       </div>
 
       {/* Relationship */}
