@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import Anthropic from "@anthropic-ai/sdk";
+import { parseJsonObjects } from "@/lib/json";
 
 export const dynamic = "force-dynamic";
 
-const QUEUE_TARGET = 9;
+const MAX_QUEUE = 9;
+const DEFAULT_QUEUE = 6;
 export const maxDuration = 120;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -45,9 +47,14 @@ function handleApiError(err: unknown): NextResponse | null {
   return null;
 }
 
+const BATCH_SIZE = 3;
+
 // ─── Route ──────────────────────────────────────────────────────────────────
 
-export async function POST() {
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => ({})) as { target?: number };
+  const target = Math.min(MAX_QUEUE, Math.max(1, Math.round(Number(body.target) || DEFAULT_QUEUE)));
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
       { error: "ANTHROPIC_API_KEY is not set. Add it in Railway → your service → Variables." },
@@ -60,20 +67,23 @@ export async function POST() {
 
     const currentCount = await db.company.count({ where: { status: "LEAD" } });
 
-    if (currentCount > QUEUE_TARGET) {
+    if (currentCount > MAX_QUEUE) {
       const excess = await db.company.findMany({
         where: { status: "LEAD" },
         orderBy: [{ recommendationScore: "asc" }, { recommendedAt: "asc" }],
-        take: currentCount - QUEUE_TARGET,
+        take: currentCount - MAX_QUEUE,
         select: { id: true },
       });
       await db.company.deleteMany({ where: { id: { in: excess.map(l => l.id) } } });
-      return NextResponse.json({ generated: 0, message: "Trimmed queue to 9" });
+      return NextResponse.json({ generated: 0, message: `Trimmed queue to ${MAX_QUEUE}` });
     }
 
-    const toGenerate = Math.max(0, QUEUE_TARGET - currentCount);
+    const toGenerate = Math.max(0, target - currentCount);
     if (toGenerate === 0) {
-      return NextResponse.json({ generated: 0, message: "Queue is already full" });
+      return NextResponse.json({
+        generated: 0,
+        message: `You already have ${currentCount} lead${currentCount === 1 ? "" : "s"} queued — pursue or pass on some, or pick a bigger queue size.`,
+      });
     }
 
     // ── Context ──────────────────────────────────────────────────────────────
@@ -134,11 +144,13 @@ export async function POST() {
 
     // Build preferences summary for the Claude prompt
     let prefsSummary = "";
+    let prefEndMarkets: string[] = [];
     if (sourcingPrefs) {
       const parts: string[] = [];
       if (sourcingPrefs.businessModel && sourcingPrefs.businessModel !== "Both") parts.push(`• Business model: ${sourcingPrefs.businessModel} only`);
       const endMarkets = (() => { try { return JSON.parse(sourcingPrefs.endMarkets); } catch { return []; } })();
       if (endMarkets.length) parts.push(`• Target end markets / industries: ${endMarkets.join(", ")}`);
+      prefEndMarkets = Array.isArray(endMarkets) ? endMarkets.filter((m: unknown): m is string => typeof m === "string") : [];
       if (sourcingPrefs.softwareType) parts.push(`• Software type: ${sourcingPrefs.softwareType}`);
       const stages = (() => { try { return JSON.parse(sourcingPrefs.targetStages); } catch { return []; } })();
       if (stages.length) parts.push(`• Target stages: ${stages.join(", ")}`);
@@ -177,15 +189,22 @@ export async function POST() {
       scoreBreakdown?: Array<{ criterion: string; met: boolean; score: number; note: string }>;
     };
 
-    let companies: Company[] = [];
+    // Split into small parallel batches: one call for all leads (each with a
+    // per-criterion score breakdown) overran the output limit and took ~2 min.
+    const batchSizes: number[] = [];
+    for (let left = toGenerate; left > 0; left -= BATCH_SIZE) batchSizes.push(Math.min(BATCH_SIZE, left));
+    const LETTER_RANGES = ["A–H", "I–Q", "R–Z"];
+    const focusFor = (i: number) => {
+      if (prefEndMarkets.length >= batchSizes.length) {
+        const mine = prefEndMarkets.filter((_, idx) => idx % batchSizes.length === i);
+        return `Focus this batch on these end markets: ${mine.join(", ")}.`;
+      }
+      return batchSizes.length > 1
+        ? `To avoid overlap with parallel batches, pick companies whose names start with ${LETTER_RANGES[i % LETTER_RANGES.length]}.`
+        : "";
+    };
 
-    try {
-      const msg = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 8000,
-        messages: [{
-          role: "user",
-          content: `Growth equity investor — B2B SaaS lead sourcing. Today: ${today}.
+    const promptFor = (count: number, focus: string) => `Growth equity investor — B2B SaaS lead sourcing. Today: ${today}.
 
 THESIS CRITERIA (score each company against all of these):
 ${thesisSummary}
@@ -194,12 +213,14 @@ SKIP (already in pipeline): ${existingNames}
 ${feedbackLine ? `\nINVESTOR FEEDBACK (use to calibrate): ${feedbackLine}` : ""}
 ${pursuedContext ? `\nCOMPANIES INVESTOR HAS PURSUED (pattern-match on these profiles when generating new leads):\n${pursuedContext}` : ""}
 
-${prefsSummary ? `INVESTOR SOURCING PREFERENCES (prioritize companies matching all of these):\n${prefsSummary}\n\n` : "Prefer vertical/industry software, B2B enterprise/mid-market, founded 2018–2023, 15–250 employees.\n\n"}Generate exactly ${toGenerate} companies. EXCLUDE: acquired, PE-owned, public, roll-up subsidiaries.
+${prefsSummary ? `INVESTOR SOURCING PREFERENCES (prioritize companies matching all of these):\n${prefsSummary}\n\n` : "Prefer vertical/industry software, B2B enterprise/mid-market, founded 2018–2023, 15–250 employees.\n\n"}Generate exactly ${count} companies. ${focus} EXCLUDE: acquired, PE-owned, public, roll-up subsidiaries.
 
 For each company use your training knowledge to estimate metrics. Apply these ARR rules:
 - ARR = MAX(employees×$250K, totalFunding÷5, stage floor)
 - Stage floors: Seed $0.5M | Series A $3M | Series B $12M | Series C $25M | Series D+ $50M
 - >$80M raised → ARR ≥ $25M | 100+ employees → ARR ≥ $10M
+
+Be concise: description 2 sentences, rationale 1–2 sentences, each breakdown note under 12 words.
 
 Return JSON array only:
 [{
@@ -209,7 +230,7 @@ Return JSON array only:
   "subSector": "",
   "geography": "City, State",
   "founded": 0,
-  "description": "2-3 sentences",
+  "description": "",
   "stage": "Series A",
   "totalFundingM": 0,
   "employees": 0,
@@ -220,50 +241,55 @@ Return JSON array only:
   "acquired": false,
   "acquiredBy": null,
   "recommendationScore": 0,
-  "recommendationRationale": "2-3 sentences overall fit",
+  "recommendationRationale": "",
   "scoreBreakdown": [
-    { "criterion": "exact criterion name", "met": true, "score": 0, "note": "1 sentence" }
+    { "criterion": "exact criterion name", "met": true, "score": 0, "note": "" }
   ],
   "source": "Training knowledge — verify via Refresh button"
 }]
 
-SCORING: score each criterion 0-100. met=true if clearly satisfied. recommendationScore = honest weighted avg (hard filter failures pull score below 50).`,
-        }],
+SCORING: score each criterion 0-100. met=true if clearly satisfied. recommendationScore = honest weighted avg (hard filter failures pull score below 50).`;
+
+    const runBatch = async (count: number, i: number): Promise<Company[]> => {
+      const msg = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 6000,
+        messages: [{ role: "user", content: promptFor(count, focusFor(i)) }],
       });
-
-      if (msg.stop_reason === "max_tokens") {
-        console.error("Lead generation response was truncated (max_tokens hit)");
-        return NextResponse.json(
-          { error: "Response was too long and got cut off. Try again — it should work on the next attempt." },
-          { status: 500 }
-        );
-      }
-
       const text = msg.content
         .filter(b => b.type === "text")
         .map(b => (b as { type: "text"; text: string }).text)
         .join("\n");
+      if (msg.stop_reason === "max_tokens") console.warn(`Lead batch ${i + 1} hit max_tokens; keeping complete entries`);
+      return parseJsonObjects<Company>(text);
+    };
 
-      const match = text.match(/\[[\s\S]*\]/);
-      if (match) {
-        try {
-          companies = JSON.parse(match[0]);
-        } catch {
-          console.error("JSON parse failed. Raw text:", text.slice(0, 500));
-          return NextResponse.json(
-            { error: "Could not parse company list. Try again." },
-            { status: 500 }
-          );
-        }
-      }
-    } catch (err) {
-      const errResponse = handleApiError(err);
+    const settled = await Promise.allSettled(batchSizes.map((n, i) => runBatch(n, i)));
+    const failures = settled.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (failures.length === settled.length) {
+      const errResponse = handleApiError(failures[0].reason);
       if (errResponse) return errResponse;
-      throw err;
+      throw failures[0].reason;
+    }
+    failures.forEach(f => console.error("Lead batch failed:", f.reason instanceof Error ? f.reason.message : f.reason));
+
+    // De-duplicate across batches and against everything already in GEOS.
+    const candidates = settled.flatMap(r => (r.status === "fulfilled" ? r.value : [])).filter(c => c?.name?.trim());
+    const alreadyTracked = await db.company.findMany({
+      where: { name: { in: candidates.map(c => c.name.trim()), mode: "insensitive" } },
+      select: { name: true },
+    });
+    const seen = new Set(alreadyTracked.map(c => c.name.toLowerCase()));
+    const companies: Company[] = [];
+    for (const c of candidates) {
+      const key = c.name.trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      companies.push(c);
     }
 
     if (!companies.length) {
-      return NextResponse.json({ error: "No companies returned. Try again." }, { status: 500 });
+      return NextResponse.json({ error: "No new companies returned. Try again." }, { status: 500 });
     }
 
     // Filter out acquired / PE-owned / public companies

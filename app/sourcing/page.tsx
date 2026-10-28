@@ -75,7 +75,8 @@ const ALL_STAGES = ["Pre-Seed", "Seed", "Series A", "Series B", "Series C", "Gro
 
 const URL_REGEX = /^https?:\/\//i;
 const DOMAIN_REGEX = /^[\w-]+\.\w{2,}(\/|$)/i;
-const QUEUE_TARGET = 9;
+const QUEUE_SIZES = [3, 6, 9];
+const QUEUE_SIZE_KEY = "geos.leads.queueSize";
 
 // Words that indicate a descriptive search query rather than a company name
 const CRITERIA_REGEX = /\b(compan(y|ies)|founded|raised?|funding|revenue|arr|employees?|software|saas|platforms?|vertical|horizontal|b2b|b2c|enterprise|startups?|between|under|over|less than|more than|that|which|with|serving|providing|industry|market|stage|series [a-c]|seed|bootstrapped)\b/i;
@@ -485,12 +486,28 @@ export default function HuntPage() {
   };
 
   // ── Leads ──
+  const [queueSize, setQueueSize] = useState(6);
+  useEffect(() => {
+    try {
+      const saved = Number(localStorage.getItem(QUEUE_SIZE_KEY));
+      if (QUEUE_SIZES.includes(saved)) setQueueSize(saved);
+    } catch { /* storage unavailable */ }
+  }, []);
+  const chooseQueueSize = (n: number) => {
+    setQueueSize(n);
+    try { localStorage.setItem(QUEUE_SIZE_KEY, String(n)); } catch { /* storage unavailable */ }
+  };
+
   const topUp = useCallback(async () => {
     if (generatingRef.current) return;
     generatingRef.current = true;
     setGenerating(true); setGenerateError(null);
     try {
-      const res = await fetch("/api/leads/generate", { method: "POST" });
+      const res = await fetch("/api/leads/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: queueSize }),
+      });
       const data = await res.json() as { generated?: number; message?: string; error?: string };
       if (!res.ok) { const msg = data.error ?? "Unknown error"; setGenerateError(msg); toast({ title: "Could not generate leads", description: msg, variant: "destructive" }); return; }
       if (data.generated === 0 && data.message) toast({ title: data.message });
@@ -499,7 +516,7 @@ export default function HuntPage() {
       const msg = err instanceof Error ? err.message : "Network error";
       setGenerateError(msg); toast({ title: "Could not generate leads", description: msg, variant: "destructive" });
     } finally { setGenerating(false); generatingRef.current = false; }
-  }, [fetchLeads, toast]);
+  }, [fetchLeads, toast, queueSize]);
 
   const refreshLead = async (lead: Lead) => {
     setRefreshingId(lead.id);
@@ -545,7 +562,7 @@ export default function HuntPage() {
   const hasSearchResults = searchResults.length > 0;
   const visibleSearchCount = searchResults.filter(r => !dismissed.has(r.name) || addedCompanies.has(r.name)).length;
   const previewAdded = previewResult ? (addedCompanies.get(previewResult.name) ?? null) : null;
-  const skeletonCount = generating ? Math.max(0, QUEUE_TARGET - leads.length) : 0;
+  const skeletonCount = generating ? Math.max(0, queueSize - leads.length) : 0;
   const endMarketsList = parseList(prefs.endMarkets);
   const targetStagesList = parseList(prefs.targetStages);
   const filteredHistory = historyFilter.trim()
@@ -746,7 +763,7 @@ export default function HuntPage() {
           )}
           {leadsLoading && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Array.from({ length: QUEUE_TARGET }).map((_, i) => <SkeletonCard key={i} />)}
+              {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           )}
           {!leadsLoading && leads.length === 0 && !generating && (
@@ -757,17 +774,33 @@ export default function HuntPage() {
                 Generate AI-recommended companies based on your default thesis.{" "}
                 {!showPrefs && <button onClick={() => setShowPrefs(true)} className="text-blue-600 hover:underline">Set your preferences first.</button>}
               </p>
-              <Button onClick={topUp} className="bg-violet-600 hover:bg-violet-700"><Sparkles size={14} className="mr-2" />Generate {QUEUE_TARGET} Random Leads</Button>
+              <div className="flex items-center justify-center gap-2">
+                <span className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 text-xs" title="How many leads to keep in your queue (fewer = cheaper)">
+                  {QUEUE_SIZES.map((n) => (
+                    <button key={n} onClick={() => chooseQueueSize(n)} disabled={generating}
+                      className={`px-2 py-1 rounded-md ${queueSize === n ? "bg-violet-600 text-white" : "text-slate-500 hover:text-slate-800"}`}>{n}</button>
+                  ))}
+                </span>
+                <Button onClick={topUp} className="bg-violet-600 hover:bg-violet-700"><Sparkles size={14} className="mr-2" />Generate {queueSize} Random Leads</Button>
+              </div>
             </div>
           )}
           {!leadsLoading && (leads.length > 0 || generating) && (
             <>
               <div className="flex items-start justify-between mb-4">
                 <p className="text-xs text-slate-400 max-w-xl">AI-recommended companies matched to your default thesis. Pursue to add to pipeline, pass to skip. <span className="text-amber-600 font-medium">Metrics are estimates — verify before progressing.</span></p>
-                <Button variant="outline" size="sm" onClick={topUp} disabled={generating} className="shrink-0 ml-4 text-violet-600 border-violet-200 hover:bg-violet-50">
+                <div className="flex items-center gap-2 shrink-0 ml-4">
+                <span className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 text-xs" title="How many leads to keep in your queue (fewer = cheaper)">
+                  {QUEUE_SIZES.map((n) => (
+                    <button key={n} onClick={() => chooseQueueSize(n)} disabled={generating}
+                      className={`px-2 py-1 rounded-md ${queueSize === n ? "bg-violet-600 text-white" : "text-slate-500 hover:text-slate-800"}`}>{n}</button>
+                  ))}
+                </span>
+                <Button variant="outline" size="sm" onClick={topUp} disabled={generating || leads.length >= queueSize} className="text-violet-600 border-violet-200 hover:bg-violet-50">
                   <Sparkles size={13} className={`mr-1.5 ${generating ? "animate-pulse" : ""}`} />
-                  {generating ? "Finding…" : `Generate ${QUEUE_TARGET} Random Leads`}
+                  {generating ? "Finding…" : leads.length >= queueSize ? "Queue full" : `Top up to ${queueSize} leads`}
                 </Button>
+                </div>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {leads.map(lead => <LeadCard key={lead.id} lead={lead} onPursue={() => processLead(lead, "pursue")} onSave={() => processLead(lead, "save")} onPass={() => processLead(lead, "pass")} onRefresh={() => refreshLead(lead)} processing={processingId === lead.id} refreshing={refreshingId === lead.id} />)}
