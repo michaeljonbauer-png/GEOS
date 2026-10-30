@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { ScoreBadge, MetricRow, CompanyPreviewModal, type CompanyPreviewData } from "@/components/sourcing/shared";
 import { normalizeUrl } from "@/lib/urls";
+import { saveResearchedCompany } from "@/lib/companyResearch";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -454,32 +455,24 @@ export default function HuntPage() {
   // ── Add company ──
   const addCompany = async (result: SearchResult, type: "pipeline" | "saved"): Promise<string | null> => {
     setAddingId(result.name);
+    const markAdded = (id: string) => {
+      const m = new Map(addedCompanies); m.set(result.name, { id, type }); setAddedCompanies(m);
+    };
     try {
-      const status = type === "pipeline" ? "QUALIFYING" : "IDENTIFIED";
-      const score = result.fitScore ?? result.huntScore ?? null;
-      const rationale = result.fitRationale ?? result.huntRationale ?? null;
-      const res = await fetch("/api/companies", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: result.name, website: result.website, description: result.description, sector: result.sector, subSector: result.subSector, geography: result.geography, founded: result.founded, stage: result.stage, totalFundingM: result.totalFundingM, employees: result.employees, arrEstimate: result.arrEstimate, arrGrowth: result.arrGrowth, nrrEstimate: result.nrrEstimate, grossMargin: result.grossMargin, status, priority: "UNKNOWN", source: result.source ?? (result._mode === "scout" ? "Scout: web-verified" : `Hunt: ${lastQuery}`), recommendationScore: score, recommendationRationale: rationale }),
+      const { id } = await saveResearchedCompany(result, {
+        status: type === "pipeline" ? "QUALIFYING" : "IDENTIFIED",
+        source: result.source ?? (result._mode === "scout" ? "Scout: web-verified" : `Hunt: ${lastQuery}`),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        const search = await fetch(`/api/companies?search=${encodeURIComponent(result.name)}`);
-        if (search.ok) {
-          const existing: Array<{ id: string; name: string }> = await search.json();
-          const match = existing.find(c => c.name.toLowerCase() === result.name.toLowerCase());
-          if (match) { const m = new Map(addedCompanies); m.set(result.name, { id: match.id, type }); setAddedCompanies(m); return match.id; }
-        }
-        throw new Error(data.error ?? "Server error");
-      }
-      const m = new Map(addedCompanies); m.set(result.name, { id: data.id, type }); setAddedCompanies(m);
-      if (result.founderName) {
-        const parts = result.founderName.trim().split(/\s+/);
-        fetch("/api/contacts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ firstName: parts[0], lastName: parts.slice(1).join(" ") || "-", title: result.founderTitle ?? "Founder", linkedinUrl: result.founderLinkedIn ?? null, email: result.founderEmail ?? null, isPrimary: true, companyId: data.id }) }).catch(() => {});
-      }
+      markAdded(id);
       toast({ title: type === "pipeline" ? `${result.name} added to pipeline` : `${result.name} saved to Companies` });
-      return data.id;
+      return id;
     } catch (err) {
+      const search = await fetch(`/api/companies?search=${encodeURIComponent(result.name)}`).catch(() => null);
+      if (search?.ok) {
+        const existing: Array<{ id: string; name: string }> = await search.json();
+        const match = existing.find(c => c.name.toLowerCase() === result.name.toLowerCase());
+        if (match) { markAdded(match.id); return match.id; }
+      }
       toast({ title: "Failed to save company", description: err instanceof Error ? err.message : "Network error", variant: "destructive" });
       return null;
     } finally { setAddingId(null); }
