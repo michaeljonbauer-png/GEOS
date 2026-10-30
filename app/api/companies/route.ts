@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
                   { name: { contains: search, mode: "insensitive" } },
                   { description: { contains: search, mode: "insensitive" } },
                   { sector: { contains: search, mode: "insensitive" } },
+                  { geography: { contains: search, mode: "insensitive" } },
                 ],
               }
             : {},

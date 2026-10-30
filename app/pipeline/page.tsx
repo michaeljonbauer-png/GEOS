@@ -14,6 +14,7 @@ interface Company {
   name: string;
   sector: string | null;
   subSector: string | null;
+  geography: string | null;
   arrEstimate: number | null;
   arrGrowth: number | null;
   priority: string;
@@ -158,11 +159,12 @@ export default function PipelinePage() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <table className="w-full min-w-[920px] text-sm">
+        <table className="w-full min-w-[1040px] text-sm">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs">
               <th className="pl-12 pr-4 py-2.5 font-medium text-slate-500">Company</th>
               <th className="px-4 py-2.5 font-medium text-slate-500">Priority</th>
+              <th className="px-4 py-2.5 font-medium text-slate-500">Location</th>
               <th className="px-4 py-2.5 font-medium text-slate-500 text-right">ARR</th>
               <th className="px-4 py-2.5 font-medium text-slate-500 text-right">Growth</th>
               <th className="px-4 py-2.5 font-medium text-slate-500">Primary contact</th>
@@ -178,7 +180,7 @@ export default function PipelinePage() {
             return (
               <tbody key={stage}>
                 <tr className="border-t border-slate-200 first:border-t-0">
-                  <td colSpan={9} className="p-0">
+                  <td colSpan={10} className="p-0">
                     <button
                       onClick={() => toggleStage(stage)}
                       aria-expanded={isOpen}
@@ -193,7 +195,7 @@ export default function PipelinePage() {
                 </tr>
                 {!isOpen ? null : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="pl-12 pr-4 pb-3 text-xs text-slate-300">No companies in this stage</td>
+                    <td colSpan={10} className="pl-12 pr-4 pb-3 text-xs text-slate-300">No companies in this stage</td>
                   </tr>
                 ) : rows.map((c) => {
                   const p = getPriorityConfig(c.priority);
@@ -213,6 +215,7 @@ export default function PipelinePage() {
                           {p.label}
                         </button>
                       </td>
+                      <td className="px-4 py-2.5 text-slate-600">{c.geography || <span className="text-slate-300">—</span>}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-slate-700">{c.arrEstimate !== null ? formatARR(c.arrEstimate) : <span className="text-slate-300">—</span>}</td>
                       <td className="px-4 py-2.5 text-right">
                         {c.arrGrowth !== null ? (
