@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// PATCH /api/leads/[id] — pursue or pass on a lead
+// PATCH /api/leads/[id] — add a lead to Companies (as Identified) or pass on it
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const { action, notes } = await req.json() as { action: "pursue" | "save" | "pass"; notes?: string };
 
-  const newStatus = action === "pursue" ? "QUALIFYING" : action === "save" ? "IDENTIFIED" : "PASSED";
+  const keep = action === "pursue" || action === "save";
+  const newStatus = keep ? "IDENTIFIED" : "PASSED";
 
   const company = await db.company.update({
     where: { id: params.id },
@@ -16,7 +17,7 @@ export async function PATCH(
   });
 
   // Record feedback signal so future lead generation can learn from it
-  const signal = action === "pursue" ? "INTERESTED" : "PASS";
+  const signal = keep ? "INTERESTED" : "PASS";
   const existing = await db.companyFeedback.findFirst({ where: { companyId: params.id } });
   if (existing) {
     await db.companyFeedback.update({

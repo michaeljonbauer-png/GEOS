@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Sparkles, ThumbsDown, ThumbsUp, ExternalLink, Building2, BookmarkPlus,
+  Sparkles, ThumbsDown, ExternalLink, BookmarkPlus,
   RotateCcw, ChevronDown, ChevronUp, History, Trash2, Clock, ArrowRight,
   Ban, AlertCircle, Search, Loader2, Settings2, Target, Radar,
   CheckCircle2, XCircle,
@@ -147,10 +147,10 @@ function SkeletonCard() {
   );
 }
 
-function ResultCard({ result, onOpenDetail, onAdd, onSave, onDismiss, adding, dismissed, addedId, addedType }: {
-  result: SearchResult; onOpenDetail: () => void; onAdd: () => void; onSave: () => void;
+function ResultCard({ result, onOpenDetail, onAdd, onDismiss, adding, dismissed, addedId }: {
+  result: SearchResult; onOpenDetail: () => void; onAdd: () => void;
   onDismiss: () => void; adding: boolean; dismissed: boolean;
-  addedId: string | null; addedType: "pipeline" | "saved" | null;
+  addedId: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isScout = result._mode === "scout";
@@ -159,14 +159,13 @@ function ResultCard({ result, onOpenDetail, onAdd, onSave, onDismiss, adding, di
   const rationaleLabel = result.fitRationale ? "Thesis fit" : "Why it matches";
 
   if (addedId) {
-    const isPipeline = addedType === "pipeline";
     return (
-      <div className={`border rounded-xl p-4 flex items-center justify-between gap-3 ${isPipeline ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"}`}>
+      <div className="border rounded-xl p-4 flex items-center justify-between gap-3 bg-emerald-50 border-emerald-200">
         <div className="min-w-0">
-          <p className={`text-sm font-semibold truncate ${isPipeline ? "text-emerald-800" : "text-slate-700"}`}>{result.name}</p>
-          <p className={`text-xs mt-0.5 ${isPipeline ? "text-emerald-600" : "text-slate-500"}`}>{isPipeline ? "Added to pipeline" : "Saved to Companies"}</p>
+          <p className="text-sm font-semibold truncate text-emerald-800">{result.name}</p>
+          <p className="text-xs mt-0.5 text-emerald-600">Added to Companies · Identified</p>
         </div>
-        <Link href={`/companies/${addedId}`} className={`flex items-center gap-1 text-xs font-medium shrink-0 ${isPipeline ? "text-emerald-700 hover:text-emerald-900" : "text-slate-600 hover:text-slate-900"}`}>
+        <Link href={`/companies/${addedId}`} className="flex items-center gap-1 text-xs font-medium shrink-0 text-emerald-700 hover:text-emerald-900">
           View profile <ArrowRight size={12} />
         </Link>
       </div>
@@ -237,8 +236,7 @@ function ResultCard({ result, onOpenDetail, onAdd, onSave, onDismiss, adding, di
       {result.totalFundingM != null && <p className="text-[10px] text-slate-400 mb-3">Total raised: <span className="font-medium text-slate-600">${result.totalFundingM}M</span></p>}
       <div className="flex gap-2 mt-auto">
         <Button size="sm" className={`flex-1 text-white text-xs ${btnColor}`} onClick={onOpenDetail}><Search size={12} className="mr-1" />View details</Button>
-        <Button size="sm" variant="outline" className="px-2.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50" onClick={onAdd} disabled={adding} title="Add to pipeline"><Building2 size={12} /></Button>
-        <Button size="sm" variant="outline" className="px-2.5 text-slate-500 border-slate-200 hover:bg-slate-50" onClick={onSave} disabled={adding} title="Save to Companies"><BookmarkPlus size={12} /></Button>
+        <Button size="sm" variant="outline" className="px-2.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50" onClick={onAdd} disabled={adding} title="Add to Companies (as Identified)"><BookmarkPlus size={12} /></Button>
         {result.website && <a href={normalizeUrl(result.website) ?? undefined} target="_blank" rel="noopener noreferrer"><Button size="sm" variant="outline" className="px-2.5"><ExternalLink size={12} /></Button></a>}
         <Button size="sm" variant="outline" className="px-2.5 text-slate-400 hover:bg-slate-50" onClick={onDismiss} title="Dismiss"><ThumbsDown size={12} /></Button>
       </div>
@@ -246,8 +244,8 @@ function ResultCard({ result, onOpenDetail, onAdd, onSave, onDismiss, adding, di
   );
 }
 
-function LeadCard({ lead, onPursue, onSave, onPass, onRefresh, processing, refreshing }: {
-  lead: Lead; onPursue: () => void; onSave: () => void; onPass: () => void; onRefresh: () => void;
+function LeadCard({ lead, onPursue, onPass, onRefresh, processing, refreshing }: {
+  lead: Lead; onPursue: () => void; onPass: () => void; onRefresh: () => void;
   processing: boolean; refreshing: boolean;
 }) {
   const router = useRouter();
@@ -287,8 +285,7 @@ function LeadCard({ lead, onPursue, onSave, onPass, onRefresh, processing, refre
           {refreshing ? "Verifying with live web data…" : "Refresh with live web data"}
         </button>
         <div className="flex gap-2">
-          <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs" onClick={onPursue}><ThumbsUp size={12} className="mr-1" />Pursue</Button>
-          <Button size="sm" variant="outline" className="px-2.5 text-slate-500 border-slate-200 hover:bg-slate-50" onClick={onSave}><BookmarkPlus size={12} /></Button>
+          <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs" onClick={onPursue} title="Add to Companies as Identified"><BookmarkPlus size={12} className="mr-1" />Add to Companies</Button>
           <Button size="sm" variant="outline" className="flex-1 text-red-500 hover:bg-red-50 border-red-200 text-xs" onClick={onPass}><ThumbsDown size={12} className="mr-1" />Pass</Button>
         </div>
       </div>
@@ -318,7 +315,7 @@ export default function HuntPage() {
   const [lastQuery, setLastQuery] = useState("");
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [addingId, setAddingId] = useState<string | null>(null);
-  const [addedCompanies, setAddedCompanies] = useState<Map<string, { id: string; type: "pipeline" | "saved" }>>(new Map());
+  const [addedCompanies, setAddedCompanies] = useState<Map<string, { id: string }>>(new Map());
   const [previewResult, setPreviewResult] = useState<SearchResult | null>(null);
   const [activeSessionDate, setActiveSessionDate] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -453,18 +450,19 @@ export default function HuntPage() {
   };
 
   // ── Add company ──
-  const addCompany = async (result: SearchResult, type: "pipeline" | "saved"): Promise<string | null> => {
+  // Newly discovered companies always start as Identified (not on the pipeline).
+  const addCompany = async (result: SearchResult): Promise<string | null> => {
     setAddingId(result.name);
     const markAdded = (id: string) => {
-      const m = new Map(addedCompanies); m.set(result.name, { id, type }); setAddedCompanies(m);
+      const m = new Map(addedCompanies); m.set(result.name, { id }); setAddedCompanies(m);
     };
     try {
       const { id } = await saveResearchedCompany(result, {
-        status: type === "pipeline" ? "QUALIFYING" : "IDENTIFIED",
+        status: "IDENTIFIED",
         source: result.source ?? (result._mode === "scout" ? "Scout: web-verified" : `Hunt: ${lastQuery}`),
       });
       markAdded(id);
-      toast({ title: type === "pipeline" ? `${result.name} added to pipeline` : `${result.name} saved to Companies` });
+      toast({ title: `${result.name} added to Companies`, description: "Saved as Identified — move it forward as you reach out." });
       return id;
     } catch (err) {
       const search = await fetch(`/api/companies?search=${encodeURIComponent(result.name)}`).catch(() => null);
@@ -530,7 +528,9 @@ export default function HuntPage() {
       const res = await fetch(`/api/leads/${lead.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
       if (!res.ok) throw new Error();
       setLeads(prev => prev.filter(l => l.id !== lead.id));
-      const msg = action === "pursue" ? { title: `${lead.name} added to pipeline`, description: "Now on the pipeline as Qualifying." } : action === "save" ? { title: `${lead.name} saved to Companies`, description: "Stored as Identified — not an active pipeline opp." } : { title: `Passed on ${lead.name}`, description: "Feedback recorded — finding a replacement…" };
+      const msg = action === "pass"
+        ? { title: `Passed on ${lead.name}`, description: "Feedback recorded — finding a replacement…" }
+        : { title: `${lead.name} added to Companies`, description: "Saved as Identified — move it forward as you reach out." };
       toast(msg); topUp();
     } catch { toast({ title: "Action failed", variant: "destructive" }); }
     finally { setProcessingId(null); }
@@ -721,13 +721,11 @@ export default function HuntPage() {
                     key={`${result.name}-${i}`}
                     result={result}
                     onOpenDetail={() => setPreviewResult(result)}
-                    onAdd={() => addCompany(result, "pipeline")}
-                    onSave={() => addCompany(result, "saved")}
+                    onAdd={() => addCompany(result)}
                     onDismiss={() => { const s = new Set(dismissed); s.add(result.name); setDismissed(s); }}
                     adding={addingId === result.name}
                     dismissed={dismissed.has(result.name)}
                     addedId={addedCompanies.get(result.name)?.id ?? null}
-                    addedType={addedCompanies.get(result.name)?.type ?? null}
                   />
                 ))}
               </div>
@@ -781,7 +779,7 @@ export default function HuntPage() {
           {!leadsLoading && (leads.length > 0 || generating) && (
             <>
               <div className="flex items-start justify-between mb-4">
-                <p className="text-xs text-slate-400 max-w-xl">AI-recommended companies matched to your default thesis. Pursue to add to pipeline, pass to skip. <span className="text-amber-600 font-medium">Metrics are estimates — verify before progressing.</span></p>
+                <p className="text-xs text-slate-400 max-w-xl">AI-recommended companies matched to your default thesis. Add the ones you like to Companies (as Identified), pass to skip. <span className="text-amber-600 font-medium">Metrics are estimates — verify before progressing.</span></p>
                 <div className="flex items-center gap-2 shrink-0 ml-4">
                 <span className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 text-xs" title="How many leads to keep in your queue (fewer = cheaper)">
                   {QUEUE_SIZES.map((n) => (
@@ -796,7 +794,7 @@ export default function HuntPage() {
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {leads.map(lead => <LeadCard key={lead.id} lead={lead} onPursue={() => processLead(lead, "pursue")} onSave={() => processLead(lead, "save")} onPass={() => processLead(lead, "pass")} onRefresh={() => refreshLead(lead)} processing={processingId === lead.id} refreshing={refreshingId === lead.id} />)}
+                {leads.map(lead => <LeadCard key={lead.id} lead={lead} onPursue={() => processLead(lead, "pursue")} onPass={() => processLead(lead, "pass")} onRefresh={() => refreshLead(lead)} processing={processingId === lead.id} refreshing={refreshingId === lead.id} />)}
                 {Array.from({ length: skeletonCount }).map((_, i) => <SkeletonCard key={`sk-${i}`} />)}
               </div>
             </>
@@ -856,10 +854,8 @@ export default function HuntPage() {
         open={!!previewResult}
         onClose={() => setPreviewResult(null)}
         addedId={previewAdded?.id ?? null}
-        addedType={previewAdded?.type ?? null}
         adding={addingId === previewResult?.name}
-        onAdd={async () => { if (previewResult) await addCompany(previewResult, "pipeline"); }}
-        onSave={async () => { if (previewResult) await addCompany(previewResult, "saved"); }}
+        onAdd={async () => { if (previewResult) await addCompany(previewResult); }}
       />
     </div>
   );
