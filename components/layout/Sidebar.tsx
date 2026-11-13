@@ -14,9 +14,11 @@ import {
   BarChart3,
   Landmark,
   Layers,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OPEN_ASSISTANT_EVENT } from "@/components/assistant/AssistantPanel";
 
 interface NavItem { href: string; label: string }
 interface NavSection {
@@ -167,6 +169,12 @@ export default function Sidebar() {
 
         {/* Sections */}
         <nav className="flex-1 px-3 py-3 overflow-y-auto">
+          <button
+            onClick={() => { close(); window.dispatchEvent(new Event(OPEN_ASSISTANT_EVENT)); }}
+            className="mb-3 flex w-full items-center gap-3 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-2.5 text-sm font-semibold text-violet-200 hover:bg-violet-500/20 transition-colors"
+          >
+            <Sparkles size={17} className="shrink-0" /> Ask GEOS
+          </button>
           {SECTIONS.map((section, idx) => {
             const Icon = section.icon;
             const isOpen = !!expanded[section.key];

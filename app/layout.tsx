@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Sidebar from "@/components/layout/Sidebar";
 import { Toaster } from "@/components/ui/toaster";
+import AssistantPanel from "@/components/assistant/AssistantPanel";
 
 export const metadata: Metadata = {
   title: "GEOS — Growth Equity Operating System",
@@ -20,6 +21,7 @@ export default function RootLayout({
           <Sidebar />
           <main className="flex-1 overflow-auto pt-14 lg:pt-0">{children}</main>
         </div>
+        <AssistantPanel />
         <Toaster />
       </body>
     </html>
