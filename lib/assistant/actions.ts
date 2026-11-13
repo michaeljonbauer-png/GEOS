@@ -124,7 +124,8 @@ export const WRITE_TOOLS: Anthropic.Tool[] = [
         relationship: { type: "string", enum: RELATIONSHIP_VALUES },
         contactTypes: { type: "array", items: { type: "string" } },
         addContactTypes: { type: "array", items: { type: "string" } },
-        notes: { type: "string", description: "Replaces the contact's notes." },
+        appendNotes: { type: "string", description: "Text added to the end of the contact's existing notes. Prefer this over notes." },
+        notes: { type: "string", description: "Replaces ALL of the contact's notes. Only when the user asks to rewrite them." },
         companyId: { type: "string" },
         companyName: { type: "string" },
         isPrimary: { type: "boolean" },
@@ -344,7 +345,13 @@ export async function prepareAction(name: string, input: unknown): Promise<Prepa
     set("phone", "Phone", str(i.phone), current.phone);
     set("linkedinUrl", "LinkedIn", normalizeUrl(str(i.linkedinUrl)) ?? undefined, current.linkedinUrl);
     set("location", "Location", str(i.location), current.location);
-    set("notes", "Notes", str(i.notes), current.notes);
+    const appended = str(i.appendNotes);
+    if (appended && !str(i.notes)) {
+      changes.notes = current.notes?.trim() ? `${current.notes.trim()}\n\n${appended}` : appended;
+      details.push(["Add to notes", appended]);
+    } else {
+      set("notes", "Notes (replace)", str(i.notes), current.notes);
+    }
     const rel = RELATIONSHIP_VALUES.includes(str(i.relationship) ?? "") ? str(i.relationship) : undefined;
     if (rel && rel !== current.relationship) { changes.relationship = rel; details.push(["Relationship", `${label(RELATIONSHIP_STRENGTHS, current.relationship)} → ${label(RELATIONSHIP_STRENGTHS, rel)}`]); }
     const replace = Array.isArray(i.contactTypes) ? await canonicalTags(i.contactTypes) : undefined;
