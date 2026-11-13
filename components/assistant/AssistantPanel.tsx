@@ -4,10 +4,22 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Sparkles, X, Send, RotateCcw, Loader2 } from "lucide-react";
+import { Sparkles, X, Send, RotateCcw, Loader2, Check, AlertTriangle, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Turn = { role: "user" | "assistant"; content: string; toolsUsed?: string[]; error?: boolean };
+type ProposalState = "pending" | "saving" | "done" | "cancelled" | "error";
+type Proposal = {
+  id: string; type: string; title: string;
+  details: { label: string; value: string }[]; warnings: string[];
+  payload: Record<string, unknown>;
+  state?: ProposalState; resultUrl?: string; resultText?: string;
+};
+type Turn = {
+  role: "user" | "assistant"; content: string; toolsUsed?: string[]; error?: boolean;
+  proposals?: Proposal[];
+  // A note recording a confirmed/cancelled change; shown small, still sent as context.
+  note?: boolean;
+};
 
 const STORAGE_KEY = "geos.assistant.history";
 export const OPEN_ASSISTANT_EVENT = "geos:open-assistant";
@@ -21,6 +33,12 @@ const TOOL_LABELS: Record<string, string> = {
   portfolio_overview: "portfolio",
   lp_overview: "LPs",
   get_thesis_and_preferences: "thesis",
+  add_company: "drafted a change",
+  add_contact: "drafted a change",
+  update_company: "drafted a change",
+  update_contact: "drafted a change",
+  log_activity: "drafted a change",
+  add_note: "drafted a change",
 };
 
 const SUGGESTIONS = [
@@ -75,7 +93,10 @@ export default function AssistantPanel() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Something went wrong");
-      setTurns((t) => [...t, { role: "assistant", content: data.reply, toolsUsed: data.toolsUsed }]);
+      setTurns((t) => [...t, {
+        role: "assistant", content: data.reply, toolsUsed: data.toolsUsed,
+        proposals: (data.proposals ?? []).map((p: Proposal) => ({ ...p, state: "pending" as const })),
+      }]);
     } catch (err) {
       setTurns((t) => [...t, { role: "assistant", content: err instanceof Error ? err.message : "Something went wrong", error: true }]);
     } finally {
@@ -84,6 +105,31 @@ export default function AssistantPanel() {
   };
 
   const closeOnMobile = () => { if (window.innerWidth < 1024) setOpen(false); };
+
+  const patchProposal = (turnIdx: number, id: string, patch: Partial<Proposal>) =>
+    setTurns((all) => all.map((t, i) => (i !== turnIdx ? t : { ...t, proposals: t.proposals?.map((p) => (p.id === id ? { ...p, ...patch } : p)) })));
+
+  const confirmProposal = async (turnIdx: number, p: Proposal) => {
+    patchProposal(turnIdx, p.id, { state: "saving" });
+    try {
+      const res = await fetch("/api/assistant/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: p.type, payload: p.payload }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Couldn't save");
+      patchProposal(turnIdx, p.id, { state: "done", resultUrl: data.url, resultText: data.summary });
+      setTurns((all) => [...all, { role: "assistant", note: true, content: `✓ Confirmed and saved: ${data.url ? `[${data.summary}](${data.url})` : data.summary}` }]);
+    } catch (err) {
+      patchProposal(turnIdx, p.id, { state: "error", resultText: err instanceof Error ? err.message : "Couldn't save" });
+    }
+  };
+
+  const cancelProposal = (turnIdx: number, p: Proposal) => {
+    patchProposal(turnIdx, p.id, { state: "cancelled" });
+    setTurns((all) => [...all, { role: "assistant", note: true, content: `✗ Cancelled by user: ${p.title}` }]);
+  };
 
   return (
     <>
@@ -109,7 +155,7 @@ export default function AssistantPanel() {
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100"><Sparkles size={15} className="text-violet-600" /></div>
             <div>
               <p className="text-sm font-semibold text-slate-900">Ask GEOS</p>
-              <p className="text-[11px] text-slate-400">Answers from your companies, contacts, deals & LPs</p>
+              <p className="text-[11px] text-slate-400">Ask questions or have it add and update records</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -136,7 +182,18 @@ export default function AssistantPanel() {
             </div>
           )}
           {turns.map((t, i) =>
-            t.role === "user" ? (
+            t.note ? (
+              <p key={i} className="text-[11px] text-slate-400">
+                <ReactMarkdown
+                  components={{
+                    p: ({ children }) => <>{children}</>,
+                    a: ({ href, children }) => <Link href={href ?? "#"} onClick={closeOnMobile} className="text-slate-500 underline">{children}</Link>,
+                  }}
+                >
+                  {t.content}
+                </ReactMarkdown>
+              </p>
+            ) : t.role === "user" ? (
               <div key={i} className="flex justify-end">
                 <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-slate-900 px-3.5 py-2 text-sm text-white">{t.content}</div>
               </div>
@@ -173,6 +230,56 @@ export default function AssistantPanel() {
                     </ReactMarkdown>
                   </div>
                 )}
+                {t.proposals && t.proposals.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    {t.proposals.filter((p) => p.state === "pending").length > 1 && (
+                      <button
+                        onClick={() => t.proposals!.filter((p) => p.state === "pending").forEach((p) => confirmProposal(i, p))}
+                        className="text-xs font-medium text-violet-700 hover:underline"
+                      >
+                        Confirm all ({t.proposals.filter((p) => p.state === "pending").length})
+                      </button>
+                    )}
+                    {t.proposals.map((p) => (
+                      <div key={p.id} className={cn(
+                        "rounded-xl border p-3",
+                        p.state === "done" ? "border-emerald-200 bg-emerald-50" : p.state === "cancelled" ? "border-slate-200 bg-slate-50 opacity-70" : p.state === "error" ? "border-red-200 bg-red-50" : "border-violet-200 bg-violet-50/50"
+                      )}>
+                        <p className="text-sm font-semibold text-slate-900">{p.title}</p>
+                        <dl className="mt-1.5 space-y-0.5">
+                          {p.details.map((d) => (
+                            <div key={d.label} className="flex gap-2 text-xs">
+                              <dt className="w-24 shrink-0 text-slate-500">{d.label}</dt>
+                              <dd className="min-w-0 break-words text-slate-800">{d.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        {p.warnings.map((w) => (
+                          <p key={w} className="mt-1.5 flex items-start gap-1 text-xs text-amber-700"><AlertTriangle size={12} className="mt-0.5 shrink-0" />{w}</p>
+                        ))}
+                        <div className="mt-2.5 flex items-center gap-2">
+                          {(p.state === "pending" || p.state === "error") && (
+                            <>
+                              <button onClick={() => confirmProposal(i, p)} className="flex items-center gap-1 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700">
+                                <Check size={13} /> {p.state === "error" ? "Retry" : "Confirm"}
+                              </button>
+                              <button onClick={() => cancelProposal(i, p)} className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-white">Cancel</button>
+                            </>
+                          )}
+                          {p.state === "saving" && <span className="flex items-center gap-1 text-xs text-slate-500"><Loader2 size={13} className="animate-spin" /> Saving{p.type === "add_company" && p.payload.research ? " — researching the company, ~30s" : "…"}</span>}
+                          {p.state === "done" && (
+                            <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                              <Check size={13} /> {p.resultText}
+                              {p.resultUrl && <Link href={p.resultUrl} onClick={closeOnMobile} className="flex items-center gap-0.5 text-emerald-800 underline">View <ArrowRight size={11} /></Link>}
+                            </span>
+                          )}
+                          {p.state === "cancelled" && <span className="text-xs text-slate-400">Cancelled</span>}
+                          {p.state === "error" && <span className="text-xs text-red-600">{p.resultText}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {t.toolsUsed && t.toolsUsed.length > 0 && (
                   <p className="mt-1 text-[11px] text-slate-400">
                     Looked up: {Array.from(new Set(t.toolsUsed.map((n) => TOOL_LABELS[n] ?? n))).join(", ")}
@@ -199,14 +306,14 @@ export default function AssistantPanel() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(input); } }}
               rows={Math.min(5, Math.max(1, input.split("\n").length))}
-              placeholder="Ask about companies, contacts, deals…"
+              placeholder="Ask a question, or say “add this contact…”"
               className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-slate-400"
             />
             <button type="submit" disabled={busy || !input.trim()} className="rounded-lg bg-violet-600 p-2 text-white hover:bg-violet-700 disabled:opacity-40" aria-label="Send">
               <Send size={14} />
             </button>
           </div>
-          <p className="mt-1.5 text-[10px] text-slate-400">Read-only: it can look things up but won&apos;t change your data.</p>
+          <p className="mt-1.5 text-[10px] text-slate-400">Changes are only saved after you click Confirm.</p>
         </form>
       </aside>
     </>

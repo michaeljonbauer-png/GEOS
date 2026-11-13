@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { ASSISTANT_TOOLS, runAssistantTool } from "@/lib/assistant/tools";
+import { WRITE_TOOLS, WRITE_TOOL_NAMES, prepareAction, type Proposal } from "@/lib/assistant/actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const MODEL = process.env.ASSISTANT_MODEL || "claude-opus-5-5";
 const MAX_TOOL_ROUNDS = 8;
+const TOOLS = [
+  ...ASSISTANT_TOOLS,
+  ...WRITE_TOOLS,
+  { type: "web_search_20260209", name: "web_search", max_uses: 3 },
+];
 
 const SYSTEM = `You are GEOS Assistant, built into GEOS — the operating system a growth equity investor uses to source companies, manage relationships (CRM), run deals, monitor portfolio companies and communicate with LPs.
 
@@ -16,7 +22,10 @@ Answer questions about the user's own GEOS data by calling the tools, which read
 - Link every company or contact you mention using the url from the tool result, e.g. [Acme Works](/companies/abc123) or [Dana Lee](/contacts/xyz789).
 - Lead with the answer. Keep it short. Use a markdown table for lists of four or more items, with only the columns that matter; otherwise use bullets or a sentence.
 - Status vocabulary: Identified, Reached Out and In Conversation are relationship stages (not on the pipeline); Qualifying, Memo Created, Offer Submitted and In Due Diligence are the pipeline; then Passed and Invested (PortCo). "Pipeline" means those four pipeline stages.
-- You can read data but not create or change it. If asked to make a change, say where in GEOS to do it (e.g. the company's page, the Pipeline stage dropdown).
+- To add or change data, use the write tools (add_company, add_contact, update_company, update_contact, log_activity, add_note). They only propose the change: the user sees a card and clicks Confirm. After proposing, say in one line what's ready to confirm; never say it has been saved. If the user later says it was confirmed, treat it as done.
+- Before proposing, search GEOS so you use existing records (right company id, no duplicates). If a write tool reports an error or ambiguity, fix it or ask the user.
+- Adding a person needs a first and last name and a company. LinkedIn pages can't be opened directly: take the name from the profile URL when it's obvious (e.g. /in/jasonrudin → Jason Rudin) and use web_search to confirm their current title and company. If you can't establish the name or company with confidence, ask rather than guess. Keep the LinkedIn URL the user gave.
+- Use web_search only to fill in details for something the user asked to add, or when they ask about the outside world; GEOS data comes from the GEOS tools.
 - For general investing questions that don't need the user's data (deal math, market concepts), answer directly.`;
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
@@ -39,6 +48,7 @@ export async function POST(req: NextRequest) {
   // which must be passed back unchanged within a turn.
   const messages: Array<{ role: "user" | "assistant"; content: unknown }> = history.map((m) => ({ role: m.role, content: m.content }));
   const toolsUsed: string[] = [];
+  const proposals: Proposal[] = [];
 
   try {
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
@@ -50,7 +60,7 @@ export async function POST(req: NextRequest) {
             { type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } },
             { type: "text", text: `Today is ${today}.` },
           ],
-          tools: ASSISTANT_TOOLS,
+          tools: TOOLS,
           messages,
           fallbacks: "default",
         } as unknown as Anthropic.MessageCreateParamsNonStreaming,
@@ -64,7 +74,12 @@ export async function POST(req: NextRequest) {
         .trim();
 
       if (response.stop_reason === "refusal") {
-        return NextResponse.json({ reply: text || "I can't help with that request.", toolsUsed });
+        return NextResponse.json({ reply: text || "I can't help with that request.", toolsUsed, proposals });
+      }
+      // A long server-side web search can pause the turn; resend to let it continue.
+      if (response.stop_reason === "pause_turn") {
+        messages.push({ role: "assistant", content: response.content });
+        continue;
       }
 
       const toolUses = response.content
@@ -74,20 +89,25 @@ export async function POST(req: NextRequest) {
         const reply = response.stop_reason === "max_tokens"
           ? `${text}\n\n_(Answer cut off — try a narrower question.)_`
           : text || "I couldn't find an answer to that.";
-        return NextResponse.json({ reply, toolsUsed });
+        return NextResponse.json({ reply, toolsUsed, proposals });
       }
 
       messages.push({ role: "assistant", content: response.content });
       const results = await Promise.all(
         toolUses.map(async (t) => {
           toolsUsed.push(t.name);
+          if (WRITE_TOOL_NAMES.has(t.name)) {
+            const prepared = await prepareAction(t.name, t.input);
+            if ("proposal" in prepared) proposals.push(prepared.proposal);
+            return { type: "tool_result", tool_use_id: t.id, content: JSON.stringify(prepared.forModel), ...("isError" in prepared && { is_error: true }) };
+          }
           const r = await runAssistantTool(t.name, t.input);
           return { type: "tool_result", tool_use_id: t.id, content: r.content, ...(r.isError && { is_error: true }) };
         }),
       );
       messages.push({ role: "user", content: results });
     }
-    return NextResponse.json({ reply: "That took too many lookups — try a more specific question.", toolsUsed });
+    return NextResponse.json({ reply: "That took too many lookups — try a more specific question.", toolsUsed, proposals });
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) {
       return NextResponse.json({ error: "Rate limit hit — wait a minute and try again." }, { status: 429 });
